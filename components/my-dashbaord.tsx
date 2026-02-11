@@ -1,0 +1,229 @@
+import { DASHBOARD_METRICS, type DashboardMetric } from "@/constants/dashboard-metrics";
+import { Colors, radius, Shadows } from "@/constants/theme";
+import { useDashboardSettings } from "@/contexts/dashboard-settings-context";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import React, { useMemo } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ThemedText } from "./themed-text";
+import { ThemedView } from "./themed-view";
+
+const TREND_POSITIVE = "#22c55e";
+const TREND_NEGATIVE = "#f97316";
+
+type Trend = "up" | "down" | "neutral";
+
+function TrendIcon({ trend }: { trend: Trend }) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? "light"];
+
+  if (trend === "up") {
+    return (
+      <Ionicons
+        name="triangle"
+        size={8}
+        color={TREND_POSITIVE}
+        style={styles.trendIconUp}
+      />
+    );
+  }
+  if (trend === "down") {
+    return (
+      <Ionicons
+        name="triangle"
+        size={8}
+        color={TREND_NEGATIVE}
+        style={styles.trendIconDown}
+      />
+    );
+  }
+  return (
+    <View
+      style={[styles.trendCircle, { backgroundColor: colors.mutedForeground }]}
+    />
+  );
+}
+
+const metricsById: Record<string, DashboardMetric> = Object.fromEntries(
+  DASHBOARD_METRICS.map((m) => [m.id, m])
+);
+
+type MyDashboardProps = {
+  onCustomizePress?: () => void;
+};
+
+export default function MyDashboard({ onCustomizePress }: MyDashboardProps) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? "light"];
+  const { getOrderedVisible, isLoading } = useDashboardSettings();
+
+  const visibleMetrics = useMemo(() => {
+    const ids = getOrderedVisible();
+    return ids.map((id) => metricsById[id]).filter(Boolean) as DashboardMetric[];
+  }, [getOrderedVisible]);
+
+  return (
+    <ThemedView style={styles.container}>
+      <View style={styles.header}>
+        <ThemedText type="title" style={styles.title}>
+          My Dashboard
+        </ThemedText>
+        <Pressable
+          onPress={onCustomizePress}
+          style={({ pressed }) => [
+            styles.customizeBtn,
+            pressed && styles.pressed,
+          ]}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Customize dashboard"
+        >
+          <ThemedText type="link" style={styles.customizeText}>
+            Customize
+          </ThemedText>
+          <Ionicons
+            name="chevron-forward"
+            size={13}
+            color={colors.primary}
+            style={styles.chevron}
+          />
+        </Pressable>
+      </View>
+
+      <View style={styles.metricsColumn}>
+        {(isLoading ? DASHBOARD_METRICS : visibleMetrics).map((item) => (
+          <View
+            key={item.id}
+            style={[
+              styles.metricRow,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+              Shadows.sm,
+            ]}
+          >
+            <View style={[styles.metricIconWrap]}>
+              <Ionicons
+                name={item.icon}
+                size={22}
+                color={colors.mutedForeground}
+              />
+            </View>
+            <View style={styles.metricBody}>
+              <Text style={[styles.metricLabel, { color: colors.foreground }]}>
+                {item.label}
+              </Text>
+            </View>
+            <View>
+              <View style={styles.valueRow}>
+                <Text
+                  style={[styles.metricValue, { color: colors.foreground }]}
+                >
+                  {item.value}
+                </Text>
+                <TrendIcon trend={item.trend} />
+              </View>
+              <Text
+                style={[
+                  styles.metricAverage,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {item.average}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 24,
+  },
+  customizeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  customizeText: {
+    fontSize: 13,
+  },
+  chevron: {
+    marginLeft: 2,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  metricsColumn: {
+    gap: 12,
+  },
+  metricRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    padding: 10,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  metricIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+    opacity: 0.6,
+  },
+  metricBody: {
+    flex: 1,
+  },
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  valueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  metricValue: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  trendIconUp: {
+    transform: [{ rotate: "0deg" }],
+  },
+  trendIconDown: {
+    transform: [{ rotate: "180deg" }],
+  },
+  trendCircle: {
+    width: 6,
+    height: 6,
+    borderRadius: 5,
+    opacity: 0.6,
+  },
+  metricAverage: {
+    fontSize: 10,
+    marginTop: 2,
+    opacity: 0.9,
+    textAlign: "center",
+  },
+});
