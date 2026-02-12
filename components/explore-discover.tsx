@@ -1,4 +1,3 @@
-import { createEntry } from "@/constants/mock-journals";
 import { Colors, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -10,7 +9,11 @@ import React, { useCallback } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ThemedText } from "./themed-text";
 
-const DEFAULT_JOURNAL_ID = "j2";
+type ExploreDiscoverProps = {
+  onStartJournaling?: (prompt: string) => void;
+  /** When set, card tap opens this callback with card info (e.g. to show a modal) instead of starting journaling directly. */
+  onCardPress?: (id: string, label: string, subtitle: string) => void;
+};
 
 const CARD_WIDTH_PCT = "48%";
 
@@ -60,7 +63,10 @@ const DISCOVER_ITEMS: Array<{
   },
 ];
 
-export function ExploreDiscover() {
+export function ExploreDiscover({
+  onStartJournaling,
+  onCardPress,
+}: ExploreDiscoverProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -68,41 +74,27 @@ export function ExploreDiscover() {
   const onPress = useCallback(
     (id: string, label: string, subtitle: string) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (onCardPress) {
+        onCardPress(id, label, subtitle);
+        return;
+      }
       if (id === "guided") {
         router.push("/(home)/(tabs)/journals");
         return;
       }
-      if (id === "topics") {
-        const newEntry = createEntry(
-          DEFAULT_JOURNAL_ID,
-          "Gratitude, goals, mood",
-        );
-        router.push({
-          pathname: "/(home)/entry/[entryId]",
-          params: { entryId: newEntry.id, journalId: DEFAULT_JOURNAL_ID },
-        });
-        return;
-      }
-      if (id === "prompts") {
-        const newEntry = createEntry(DEFAULT_JOURNAL_ID, "Trending this week");
-        router.push({
-          pathname: "/(home)/entry/[entryId]",
-          params: { entryId: newEntry.id, journalId: DEFAULT_JOURNAL_ID },
-        });
-        return;
-      }
-      if (id === "tips") {
-        const newEntry = createEntry(
-          DEFAULT_JOURNAL_ID,
-          "Writing tip: Short reflections work",
-        );
-        router.push({
-          pathname: "/(home)/entry/[entryId]",
-          params: { entryId: newEntry.id, journalId: DEFAULT_JOURNAL_ID },
-        });
+      if (onStartJournaling) {
+        const prompt =
+          id === "topics"
+            ? "Gratitude, goals, mood"
+            : id === "prompts"
+              ? "Trending this week"
+              : id === "tips"
+                ? "Writing tip: Short reflections work"
+                : subtitle;
+        onStartJournaling(prompt);
       }
     },
-    [router],
+    [router, onStartJournaling, onCardPress],
   );
 
   return (

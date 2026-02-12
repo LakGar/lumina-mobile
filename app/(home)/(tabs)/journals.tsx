@@ -1,16 +1,18 @@
 import TabHeader from "@/components/tab-header";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { getJournalEntryCount, MOCK_JOURNALS } from "@/constants/mock-journals";
 import { Colors, radius } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import type { Journal } from "@/lib/api";
 import { formatUpdatedShort } from "@/utils/date";
 import { SignedIn } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,17 +33,43 @@ export default function JournalsScreen() {
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const api = useApi();
   const [searchQuery, setSearchQuery] = useState("");
+  const [journals, setJournals] = useState<Journal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadJournals = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await api.fetchJournals();
+      setJournals(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load journals");
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  const loadJournalsRef = useRef(loadJournals);
+  loadJournalsRef.current = loadJournals;
+
+  useFocusEffect(
+    useCallback(() => {
+      loadJournalsRef.current();
+    }, []),
+  );
 
   const filteredJournals = useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_JOURNALS;
+    if (!searchQuery.trim()) return journals;
     const q = searchQuery.trim().toLowerCase();
-    return MOCK_JOURNALS.filter(
+    return journals.filter(
       (j) =>
         j.title.toLowerCase().includes(q) ||
         (j.description?.toLowerCase().includes(q) ?? false),
     );
-  }, [searchQuery]);
+  }, [journals, searchQuery]);
 
   const onAdd = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -75,7 +103,46 @@ export default function JournalsScreen() {
               {filteredJournals.length !== 1 ? "s" : ""}
             </ThemedText>
           </View>
-          {filteredJournals.length === 0 ? (
+          {loading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText
+                style={[styles.emptyText, { color: colors.mutedForeground }]}
+              >
+                Loading journals…
+              </ThemedText>
+            </View>
+          ) : error ? (
+            <View style={styles.empty}>
+              <Ionicons
+                name="alert-circle-outline"
+                size={48}
+                color={colors.destructive}
+              />
+              <ThemedText
+                style={[styles.emptyText, { color: colors.mutedForeground }]}
+              >
+                {error}
+              </ThemedText>
+              <Pressable
+                onPress={loadJournals}
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  { backgroundColor: colors.primary },
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.retryButtonText,
+                    { color: colors.primaryForeground },
+                  ]}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            </View>
+          ) : filteredJournals.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons
                 name="book-outline"
@@ -141,7 +208,7 @@ export default function JournalsScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {getJournalEntryCount(journal.id)}
+                    {journal.entryCount}
                   </Text>
                   <Ionicons
                     name="chevron-forward"
@@ -283,5 +350,15 @@ const styles = StyleSheet.create({
   folderCount: {
     fontSize: 15,
     fontWeight: "500",
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    marginTop: 12,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

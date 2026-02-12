@@ -1,12 +1,8 @@
-import { createEntry } from "@/constants/mock-journals";
 import { Colors, radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
 import React, { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
-const DEFAULT_JOURNAL_ID = "j2";
 
 const TOPICS = [
   "Gratitude",
@@ -17,21 +13,22 @@ const TOPICS = [
   "Intentions",
 ];
 
-export function ExploreTopicPills() {
-  const router = useRouter();
+type ExploreTopicPillsProps = {
+  onStartJournaling?: (prompt: string) => void;
+};
+
+export function ExploreTopicPills({
+  onStartJournaling,
+}: ExploreTopicPillsProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 
   const onPress = useCallback(
     (topic: string) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const newEntry = createEntry(DEFAULT_JOURNAL_ID, topic);
-      router.push({
-        pathname: "/(home)/entry/[entryId]",
-        params: { entryId: newEntry.id, journalId: DEFAULT_JOURNAL_ID },
-      });
+      onStartJournaling?.(topic);
     },
-    [router],
+    [onStartJournaling],
   );
 
   return (

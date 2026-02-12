@@ -14,8 +14,6 @@ import {
 } from "react-native";
 import { ThemedText } from "./themed-text";
 
-const DEFAULT_JOURNAL_ID = "j2";
-
 const CARD_WIDTH = Dimensions.get("window").width * 0.7;
 const CARD_MARGIN = 10;
 
@@ -51,13 +49,19 @@ const TRENDING_PROMPTS: Array<{
   },
 ];
 
-export function ExploreTrendingPrompts() {
+type ExploreTrendingPromptsProps = {
+  onStartJournaling?: (prompt: string) => void;
+};
+
+export function ExploreTrendingPrompts({
+  onStartJournaling,
+}: ExploreTrendingPromptsProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 
-  const onPress = (id: string) => {
+  const onPress = (item: (typeof TRENDING_PROMPTS)[0]) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: start journaling with this prompt
+    onStartJournaling?.(item.text);
   };
 
   return (

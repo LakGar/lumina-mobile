@@ -1,11 +1,14 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, radius } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,19 +26,33 @@ export default function CreateJournalScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
+  const api = useApi();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const goBack = () => router.back();
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
+    const t = title.trim();
+    if (!t || submitting) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: persist journal (API/context), then navigate to journal detail or list
-    router.back();
+    setSubmitting(true);
+    try {
+      const journal = await api.createJournal(t);
+      router.replace(`/(home)/journal/${journal.id}`);
+    } catch (e) {
+      Alert.alert(
+        "Error",
+        e instanceof Error ? e.message : "Could not create journal",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const canSubmit = title.trim().length > 0;
+  const canSubmit = title.trim().length > 0 && !submitting;
 
   return (
     <ThemedView style={styles.container}>
@@ -81,18 +98,22 @@ export default function CreateJournalScreen() {
           accessibilityRole="button"
           accessibilityLabel="Create journal"
         >
-          <ThemedText
-            style={[
-              styles.saveText,
-              {
-                color: canSubmit
-                  ? colors.primaryForeground
-                  : colors.mutedForeground,
-              },
-            ]}
-          >
-            Create
-          </ThemedText>
+          {submitting ? (
+            <ActivityIndicator size="small" color={colors.primaryForeground} />
+          ) : (
+            <ThemedText
+              style={[
+                styles.saveText,
+                {
+                  color: canSubmit
+                    ? colors.primaryForeground
+                    : colors.mutedForeground,
+                },
+              ]}
+            >
+              Create
+            </ThemedText>
+          )}
         </Pressable>
       </View>
 

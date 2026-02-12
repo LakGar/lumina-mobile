@@ -1,17 +1,39 @@
-import { createEntry } from "@/constants/mock-journals";
 import { Colors, radius, Shadows } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import type { MoodLog } from "@/lib/api";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import React, { useCallback } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { ThemedText } from "./themed-text";
 
-const DEFAULT_JOURNAL_ID = "j2";
-/** Mock "last entry" for Previous entry button (e5 = Evening reflection in j2) */
-const LAST_ENTRY_ID = "e5";
+export type InsightSectionProps = {
+  selectedDate?: Date;
+  entriesThisWeek?: number | null;
+  entriesForSelectedDay?: number | null;
+  lastJournalEntry?: { title: string; daysAgo: number } | null;
+  journaledDaysThisWeek?: boolean[] | null;
+  /** @deprecated Mood card now uses standalone general moods from GET /api/moods */
+  recentMoodSummary?: { lastMood: string; count: number } | null;
+  /** Lumina level score (0 when no backend). */
+  luminaScore?: number;
+  /** Optional: navigate to mood trends screen (e.g. "View trends" link). */
+  onNavigateToMood?: () => void;
+  onCreateEntry: () => void;
+  onNavigateToEntry: (entryId: string, journalId: string) => void;
+  onNavigateToCreateJournal?: () => void;
+};
 
 const LUMINA_TIERS = [
   { id: "bronze", label: "Bronze", progressMax: 100 },
@@ -24,31 +46,109 @@ const LUMINA_TIERS = [
 
 const WEEKDAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
-// Mock data – replace with real state/API later
-const MOCK = {
-  currentTierIndex: 1,
-  tierProgress: 65,
-  lastJournalDaysAgo: 2,
-  lastJournalTitle: "Evening reflection",
-  journaledDaysThisWeek: [true, true, false, true, true, false, false],
-  entriesThisWeek: 5,
-};
+const DEFAULT_WEEK_BAR = [
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+] as const;
 
 const CARD_WIDTH_PCT = "48.8%";
 
-export function InsightSection() {
+export function InsightSection({
+  selectedDate,
+  entriesThisWeek: entriesThisWeekProp,
+  entriesForSelectedDay,
+  lastJournalEntry,
+  journaledDaysThisWeek,
+  recentMoodSummary,
+  luminaScore = 0,
+  onNavigateToMood,
+  onCreateEntry,
+  onNavigateToEntry,
+  onNavigateToCreateJournal,
+}: InsightSectionProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
-  const tier = LUMINA_TIERS[MOCK.currentTierIndex];
-  const progressPct = Math.min(
-    100,
-    (MOCK.tierProgress / (tier?.progressMax ?? 100)) * 100,
+  const api = useApi();
+  const entriesThisWeek = entriesThisWeekProp ?? 0;
+  const weekBar = journaledDaysThisWeek ?? [...DEFAULT_WEEK_BAR];
+  const tier = LUMINA_TIERS[0];
+  const progressPct = Math.min(100, Math.max(0, luminaScore));
+
+  const [generalMoods, setGeneralMoods] = useState<MoodLog[]>([]);
+  const [moodModalVisible, setMoodModalVisible] = useState(false);
+  const [moodTitleInput, setMoodTitleInput] = useState("");
+  const [moodNoteInput, setMoodNoteInput] = useState("");
+  const [moodSubmitting, setMoodSubmitting] = useState(false);
+  const apiRef = useRef(api);
+  apiRef.current = api;
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      apiRef.current
+        .fetchMoods({ limit: 30 })
+        .then((list) => {
+          if (!cancelled) setGeneralMoods(list);
+        })
+        .catch(() => {
+          if (!cancelled) setGeneralMoods([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
   );
+
+  const lastGeneralMood = generalMoods[0] ?? null;
+  const generalMoodCount = generalMoods.length;
+
+  const openLogMoodModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMoodTitleInput("");
+    setMoodNoteInput("");
+    setMoodModalVisible(true);
+  }, []);
+
+  const closeLogMoodModal = useCallback(() => {
+    setMoodModalVisible(false);
+    setMoodTitleInput("");
+    setMoodNoteInput("");
+  }, []);
+
+  const submitLogMood = useCallback(() => {
+    const title = moodTitleInput.trim();
+    if (!title) {
+      Alert.alert("Mood required", "Please enter how you're feeling.");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMoodSubmitting(true);
+    api
+      .createMood({
+        title,
+        note: moodNoteInput.trim() || null,
+      })
+      .then((newMood) => {
+        setGeneralMoods((prev) => [newMood, ...prev]);
+        closeLogMoodModal();
+      })
+      .catch(() => {
+        Alert.alert("Error", "Could not save mood. Please try again.");
+      })
+      .finally(() => {
+        setMoodSubmitting(false);
+      });
+  }, [api, moodTitleInput, moodNoteInput, closeLogMoodModal]);
 
   // Gradient backgrounds – soft wash from card to theme tint
   type GradientTuple = readonly [string, string, string];
   const cardGradients: Record<
-    "level" | "lastJournal" | "weekly" | "entries",
+    "level" | "lastJournal" | "weekly" | "entries" | "mood",
     GradientTuple
   > = {
     level:
@@ -79,6 +179,10 @@ export function InsightSection() {
             "rgba(245, 245, 244, 0.8)",
             "rgba(115, 115, 115, 0.05)",
           ],
+    mood:
+      colorScheme === "dark"
+        ? [colors.card, "rgba(34, 197, 94, 0.12)", "rgba(187, 247, 208, 0.04)"]
+        : [colors.card, "rgba(187, 247, 208, 0.5)", "rgba(34, 197, 94, 0.08)"],
   };
 
   // Title strip backgrounds – clearer, still on theme
@@ -99,15 +203,18 @@ export function InsightSection() {
       colorScheme === "dark"
         ? "rgba(161, 161, 170, 0.18)"
         : "rgba(115, 115, 115, 0.12)",
+    mood:
+      colorScheme === "dark"
+        ? "rgba(34, 197, 94, 0.2)"
+        : "rgba(34, 197, 94, 0.14)",
   };
   const titleColor = {
     level: colorScheme === "dark" ? "#fed7aa" : "#9a3412",
     lastJournal: colorScheme === "dark" ? "#e9d5ff" : "#6b21a8",
     weekly: colorScheme === "dark" ? "#fef3c7" : "#92400e",
     entries: colorScheme === "dark" ? "#d4d4d8" : "#52525b",
+    mood: colorScheme === "dark" ? "#86efac" : "#15803d",
   };
-
-  const router = useRouter();
 
   const handlePress = useCallback((action: () => void) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -115,30 +222,45 @@ export function InsightSection() {
   }, []);
 
   const onWriteEntry = useCallback(() => {
-    const newEntry = createEntry(DEFAULT_JOURNAL_ID);
-    router.push({
-      pathname: "/(home)/entry/[entryId]",
-      params: { entryId: newEntry.id, journalId: DEFAULT_JOURNAL_ID },
-    });
-  }, [router]);
+    handlePress(onCreateEntry);
+  }, [handlePress, onCreateEntry]);
 
+  const router = useRouter();
   const onCreateJournal = useCallback(() => {
-    router.push("/(home)/create-journal");
-  }, [router]);
+    const go =
+      onNavigateToCreateJournal ??
+      (() => router.push("/(home)/create-journal"));
+    handlePress(go);
+  }, [handlePress, onNavigateToCreateJournal, router]);
 
-  const onPreviousEntry = useCallback(() => {
-    router.push({
-      pathname: "/(home)/entry/[entryId]",
-      params: { entryId: LAST_ENTRY_ID, journalId: DEFAULT_JOURNAL_ID },
-    });
-  }, [router]);
+  const onPreviousEntry = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const entries = await api.fetchMyEntries(1);
+      const first = entries[0];
+      if (!first) {
+        Alert.alert("No entries yet", "Write your first entry to see it here.");
+        return;
+      }
+      onNavigateToEntry(first.id, first.journalId);
+    } catch (e) {
+      Alert.alert(
+        "Error",
+        e instanceof Error ? e.message : "Could not load previous entry",
+      );
+    }
+  }, [api, onNavigateToEntry]);
 
+  const lastJournalDaysAgo = lastJournalEntry?.daysAgo ?? null;
+  const lastJournalTitle = lastJournalEntry?.title ?? null;
   const lastJournalText =
-    MOCK.lastJournalDaysAgo === 0
-      ? "Today"
-      : MOCK.lastJournalDaysAgo === 1
-        ? "Yesterday"
-        : `${MOCK.lastJournalDaysAgo} days ago`;
+    lastJournalEntry == null
+      ? "No entries yet"
+      : lastJournalDaysAgo === 0
+        ? "Today"
+        : lastJournalDaysAgo === 1
+          ? "Yesterday"
+          : `${lastJournalDaysAgo} days ago`;
 
   return (
     <View style={styles.container}>
@@ -178,7 +300,7 @@ export function InsightSection() {
             </View>
             <View>
               <Text style={[styles.tileValue, { color: colors.foreground }]}>
-                {tier?.label ?? "Bronze"}
+                {luminaScore > 0 ? (tier?.label ?? "Bronze") : "0"}
               </Text>
               <View
                 style={[
@@ -202,7 +324,9 @@ export function InsightSection() {
                   { color: colors.foreground },
                 ]}
               >
-                1,345pts to Gold
+                {luminaScore > 0
+                  ? "Keep journaling to level up"
+                  : "Start journaling to earn points"}
               </Text>
             </View>
           </View>
@@ -241,12 +365,12 @@ export function InsightSection() {
               numberOfLines={2}
             >
               {lastJournalText}
-              {MOCK.lastJournalTitle ? ` · ${MOCK.lastJournalTitle}` : ""}
+              {lastJournalTitle ? ` · ${lastJournalTitle}` : ""}
             </Text>
           </View>
         </View>
 
-        {/* Journals this week card */}
+        {/* This week: journaled every day? */}
         <View
           style={[
             styles.tile,
@@ -274,15 +398,19 @@ export function InsightSection() {
                 <Text
                   style={[styles.dayLabel, { color: colors.mutedForeground }]}
                 >
-                  ENTRIES
+                  {weekBar.every(Boolean)
+                    ? "JOURNALED EVERY DAY"
+                    : "DAYS JOURNALED"}
                 </Text>
                 <Text
                   style={[
-                    styles.dayLabel,
-                    { color: colors.mutedForeground, fontSize: 16 },
+                    styles.tileValue,
+                    { color: colors.foreground, marginBottom: 0 },
                   ]}
                 >
-                  4/7
+                  {weekBar.every(Boolean)
+                    ? "Every day!"
+                    : `${weekBar.filter(Boolean).length}/7 days`}
                 </Text>
               </View>
               <View style={styles.weekBar}>
@@ -292,10 +420,10 @@ export function InsightSection() {
                       style={[
                         styles.daySegment,
                         {
-                          backgroundColor: MOCK.journaledDaysThisWeek[i]
+                          backgroundColor: weekBar[i]
                             ? colors.primary
                             : colors.muted,
-                          opacity: MOCK.journaledDaysThisWeek[i] ? 1 : 0.5,
+                          opacity: weekBar[i] ? 1 : 0.5,
                         },
                       ]}
                     />
@@ -330,11 +458,165 @@ export function InsightSection() {
               </Text>
             </View>
             <Text style={[styles.tileValue, { color: colors.foreground }]}>
-              {MOCK.entriesThisWeek}
+              {entriesThisWeek}
             </Text>
           </View>
         </View>
+
+        {/* Mood card – general mood (standalone), not tied to a journal */}
+        <Pressable
+          onPress={openLogMoodModal}
+          style={({ pressed }) => [
+            styles.tile,
+            { borderColor: colors.border, width: CARD_WIDTH_PCT },
+            Shadows.sm,
+            pressed && { opacity: 0.9 },
+          ]}
+        >
+          <LinearGradient
+            colors={cardGradients.mood}
+            style={StyleSheet.absoluteFillObject}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+          <View style={styles.tileContent}>
+            <View style={[styles.titlePill, { backgroundColor: titleBg.mood }]}>
+              <Text style={[styles.tileLabel, { color: titleColor.mood }]}>
+                Mood
+              </Text>
+            </View>
+            <Text
+              style={[styles.tileValue, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
+              {lastGeneralMood ? lastGeneralMood.title : "—"}
+            </Text>
+            <Text
+              style={[
+                styles.tileValueSecondary,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              {generalMoodCount > 0
+                ? `${generalMoodCount} logged`
+                : "Tap to log mood"}
+            </Text>
+          </View>
+        </Pressable>
       </View>
+
+      {/* Log mood modal – general mood with optional note */}
+      <Modal
+        visible={moodModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeLogMoodModal}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={closeLogMoodModal}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <ThemedText style={styles.modalTitle}>Log mood</ThemedText>
+            <Text
+              style={[styles.modalLabel, { color: colors.mutedForeground }]}
+            >
+              How are you feeling?
+            </Text>
+            <TextInput
+              style={[
+                styles.modalInput,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                },
+              ]}
+              placeholder="e.g. Grateful, Calm, Tired"
+              placeholderTextColor={colors.mutedForeground}
+              value={moodTitleInput}
+              onChangeText={setMoodTitleInput}
+              autoCapitalize="sentences"
+              editable={!moodSubmitting}
+            />
+            <Text
+              style={[styles.modalLabel, { color: colors.mutedForeground }]}
+            >
+              Additional note (optional)
+            </Text>
+            <TextInput
+              style={[
+                styles.modalInput,
+                styles.modalInputMultiline,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                },
+              ]}
+              placeholder="Any context or reflection..."
+              placeholderTextColor={colors.mutedForeground}
+              value={moodNoteInput}
+              onChangeText={setMoodNoteInput}
+              multiline
+              numberOfLines={3}
+              editable={!moodSubmitting}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={closeLogMoodModal}
+                disabled={moodSubmitting}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  { borderColor: colors.border },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text
+                  style={[styles.modalButtonText, { color: colors.foreground }]}
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={submitLogMood}
+                disabled={moodSubmitting}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  { backgroundColor: colors.primary },
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                {moodSubmitting ? (
+                  <Text
+                    style={[
+                      styles.modalButtonText,
+                      { color: colors.primaryForeground },
+                    ]}
+                  >
+                    Saving...
+                  </Text>
+                ) : (
+                  <Text
+                    style={[
+                      styles.modalButtonText,
+                      { color: colors.primaryForeground },
+                    ]}
+                  >
+                    Save
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Action buttons – full width row */}
       <View style={styles.actions}>
@@ -515,6 +797,59 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     fontSize: 13,
+    fontWeight: "600",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 20,
+    ...Shadows.lg,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 16,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  modalInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 14,
+  },
+  modalInputMultiline: {
+    minHeight: 72,
+    textAlignVertical: "top",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalButtonText: {
+    fontSize: 16,
     fontWeight: "600",
   },
 });

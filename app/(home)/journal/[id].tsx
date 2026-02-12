@@ -1,21 +1,18 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import {
-  createEntry,
-  getEntriesForJournal,
-  getEntryListTitle,
-  getEntryPreview,
-  getJournalById,
-  type EntrySortOption,
-} from "@/constants/mock-journals";
+
+import { getEntryListTitle, getEntryPreview } from "@/constants/mock-journals";
 import { Colors, radius } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import type { EntrySortOption, Journal, JournalEntry } from "@/lib/api";
 import { formatEntryListTime } from "@/utils/date";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -40,19 +37,41 @@ export default function JournalDetailScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
+  const api = useApi();
 
-  const journal = id ? getJournalById(id) : undefined;
+  const [journal, setJournal] = useState<Journal | null>(null);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<EntrySortOption>("newest");
   const [searchQuery, setSearchQuery] = useState("");
-  const [entries, setEntries] = useState<
-    ReturnType<typeof getEntriesForJournal>
-  >(id ? getEntriesForJournal(id, sort) : []);
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
+  const [creating, setCreating] = useState(false);
 
+  const loadJournalAndEntries = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [j, { entries: list }] = await Promise.all([
+        api.fetchJournal(id),
+        api.fetchJournalEntries(id, { sort }),
+      ]);
+      setJournal(j ?? null);
+      setEntries(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [id, sort, api]);
+
+  const loadJournalAndEntriesRef = useRef(loadJournalAndEntries);
+  loadJournalAndEntriesRef.current = loadJournalAndEntries;
   useFocusEffect(
     useCallback(() => {
-      if (id) setEntries(getEntriesForJournal(id, sort));
-    }, [id, sort]),
+      loadJournalAndEntriesRef.current();
+    }, []),
   );
 
   const filteredEntries = useMemo(() => {
@@ -69,17 +88,61 @@ export default function JournalDetailScreen() {
 
   const goBack = () => router.back();
 
-  const onCreateEntry = useCallback(() => {
+  const creatingRef = useRef(false);
+  const onCreateEntry = useCallback(async () => {
     if (!id) return;
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newEntry = createEntry(id);
-    router.push({
-      pathname: "/(home)/entry/[entryId]",
-      params: { entryId: newEntry.id, journalId: id },
-    });
-  }, [id, router]);
+    setCreating(true);
+    try {
+      const newEntry = await api.createEntry(id, { content: "." });
+      router.push({
+        pathname: "/(home)/entry/[entryId]",
+        params: { entryId: newEntry.id, journalId: id },
+      });
+    } catch {
+      setCreating(false);
+      creatingRef.current = false;
+    } finally {
+      creatingRef.current = false;
+    }
+  }, [id, router, api]);
 
-  if (!id || !journal) {
+  if (!id) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText style={styles.notFound}>Journal not found.</ThemedText>
+        <Pressable onPress={goBack}>
+          <ThemedText style={{ color: colors.primary }}>Go back</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  if (loading && !journal) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <ThemedText style={{ color: colors.mutedForeground, marginTop: 12 }}>
+          Loading…
+        </ThemedText>
+      </ThemedView>
+    );
+  }
+
+  if (error && !journal) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText style={styles.notFound}>{error}</ThemedText>
+        <Pressable onPress={goBack}>
+          <ThemedText style={{ color: colors.primary }}>Go back</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  if (!journal) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText style={styles.notFound}>Journal not found.</ThemedText>
@@ -289,20 +352,28 @@ export default function JournalDetailScreen() {
           </ThemedText>
           <Pressable
             onPress={onCreateEntry}
+            disabled={creating}
             style={({ pressed }) => [
               styles.createButton,
               { backgroundColor: colors.primary },
-              pressed && { opacity: 0.9 },
+              pressed && !creating && { opacity: 0.9 },
             ]}
           >
-            <Text
-              style={[
-                styles.createButtonLabel,
-                { color: colors.primaryForeground },
-              ]}
-            >
-              Create entry
-            </Text>
+            {creating ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.primaryForeground}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.createButtonLabel,
+                  { color: colors.primaryForeground },
+                ]}
+              >
+                Create entry
+              </Text>
+            )}
           </Pressable>
         </View>
       ) : (
@@ -327,14 +398,26 @@ export default function JournalDetailScreen() {
           >
             <Pressable
               onPress={onCreateEntry}
+              disabled={creating}
               style={({ pressed }) => [
                 styles.fab,
                 { backgroundColor: colors.primary },
-                pressed && { opacity: 0.9 },
+                pressed && !creating && { opacity: 0.9 },
               ]}
               accessibilityLabel="Create entry"
             >
-              <Ionicons name="add" size={28} color={colors.primaryForeground} />
+              {creating ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primaryForeground}
+                />
+              ) : (
+                <Ionicons
+                  name="add"
+                  size={28}
+                  color={colors.primaryForeground}
+                />
+              )}
             </Pressable>
           </View>
         </>
@@ -345,6 +428,7 @@ export default function JournalDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  centered: { justifyContent: "center", alignItems: "center" },
   notFound: { padding: 20 },
   header: {
     flexDirection: "row",

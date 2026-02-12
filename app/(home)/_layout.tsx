@@ -21,6 +21,17 @@ export default function HomeLayout() {
       <Stack.Screen name="my-account" />
       <Stack.Screen name="app-settings" />
       <Stack.Screen name="privacy-settings" />
+      <Stack.Screen
+        name="subscription"
+        options={{ title: "Upgrade membership" }}
+      />
+      <Stack.Screen name="tutorial" options={{ title: "Tutorial" }} />
+      <Stack.Screen name="about" options={{ title: "About" }} />
+      <Stack.Screen
+        name="membership-services"
+        options={{ title: "Membership & support" }}
+      />
+      <Stack.Screen name="mood" options={{ title: "Mood" }} />
     </Stack>
   );
 }

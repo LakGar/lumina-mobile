@@ -1,4 +1,3 @@
-import { createEntry } from "@/constants/mock-journals";
 import { Colors, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -9,8 +8,6 @@ import React, { useCallback } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ThemedText } from "./themed-text";
 
-const JOURNAL_OF_THE_DAY_ID = "j2";
-
 const MOCK_JOURNAL = {
   title: "Evening wind-down",
   description:
@@ -18,19 +15,23 @@ const MOCK_JOURNAL = {
   promptCount: 3,
 };
 
-export function JournalOfTheDay() {
+type JournalOfTheDayProps = {
+  onStartJournaling?: (prompt: string) => void;
+};
+
+export function JournalOfTheDay({ onStartJournaling }: JournalOfTheDayProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 
   const onStart = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newEntry = createEntry(JOURNAL_OF_THE_DAY_ID, MOCK_JOURNAL.title);
-    router.push({
-      pathname: "/(home)/entry/[entryId]",
-      params: { entryId: newEntry.id, journalId: JOURNAL_OF_THE_DAY_ID },
-    });
-  }, [router]);
+    if (onStartJournaling) {
+      onStartJournaling(MOCK_JOURNAL.title);
+      return;
+    }
+    router.push("/(home)/(tabs)/journals");
+  }, [router, onStartJournaling]);
 
   const gradientColors: readonly [string, string, string] =
     colorScheme === "dark"

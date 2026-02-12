@@ -2,13 +2,17 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getSafeExternalUrl } from "@/lib/safe-url";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import React from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import React, { useCallback } from "react";
 import {
+  Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,12 +23,58 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const PADDING_H = 20;
 
+/** Clerk Account Portal URL for profile/email/password (e.g. https://your-instance.clerk.accounts.dev/user). Set in .env as EXPO_PUBLIC_CLERK_ACCOUNT_URL. */
+function getClerkAccountUrl(): string | null {
+  const url =
+    typeof process !== "undefined" && process.env?.EXPO_PUBLIC_CLERK_ACCOUNT_URL
+      ? (process.env.EXPO_PUBLIC_CLERK_ACCOUNT_URL as string).trim()
+      : null;
+  if (!url) return null;
+  return url.includes("/user") ? url : `${url.replace(/\/$/, "")}/user`;
+}
+
 export default function MyAccountScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   const { user } = useUser();
+
+  useFocusEffect(
+    useCallback(() => {
+      user?.reload?.();
+    }, [user]),
+  );
+
+  const openAccountManagement = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const rawUrl = getClerkAccountUrl();
+    const accountUrl = getSafeExternalUrl(rawUrl);
+    if (accountUrl) {
+      WebBrowser.openBrowserAsync(accountUrl).catch(() => {
+        Linking.openURL(accountUrl).catch(() => {
+          Alert.alert(
+            "Could not open",
+            "Account management could not be opened. Check your connection.",
+          );
+        });
+      });
+      return;
+    }
+    if (rawUrl != null && rawUrl.length > 0) {
+      Alert.alert(
+        "Invalid URL",
+        "Account URL is not safe to open. Use an https link in EXPO_PUBLIC_CLERK_ACCOUNT_URL.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+    Alert.alert(
+      "Account management",
+      "Set EXPO_PUBLIC_CLERK_ACCOUNT_URL in your .env to your Clerk Account Portal profile URL (e.g. https://your-instance.clerk.accounts.dev/user) to edit name, email, and password from this app.",
+      [{ text: "OK" }],
+    );
+  }, []);
 
   const displayName =
     user?.fullName ??
@@ -136,9 +186,7 @@ export default function MyAccountScreen() {
                 ) : null}
               </View>
               <Pressable
-                onPress={() =>
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                }
+                onPress={openAccountManagement}
                 style={({ pressed }) => [
                   styles.editButton,
                   { borderColor: colors.border },
@@ -170,9 +218,7 @@ export default function MyAccountScreen() {
             ]}
           >
             <Pressable
-              onPress={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              }
+              onPress={openAccountManagement}
               style={({ pressed }) => [
                 styles.row,
                 { borderBottomColor: colors.border },
@@ -194,9 +240,7 @@ export default function MyAccountScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              }
+              onPress={openAccountManagement}
               style={({ pressed }) => [
                 styles.row,
                 styles.rowLast,

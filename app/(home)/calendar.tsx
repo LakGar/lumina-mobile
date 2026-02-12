@@ -8,26 +8,27 @@ import type {
   CalendarItem,
   CalendarWeekSection,
 } from "@/constants/calendar-mock";
-import { getMockCalendarSections } from "@/constants/calendar-mock";
 import { Colors, radius } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
+import { useCalendarData, type CalendarMode } from "@/hooks/use-calendar-data";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Switch,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-type CalendarMode = "all" | "upcoming" | "history";
 
 type SectionType = CalendarWeekSection;
 
@@ -55,6 +56,7 @@ export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
+  const api = useApi();
 
   const [mode, setMode] = useState<CalendarMode>("all");
   const [addSheetVisible, setAddSheetVisible] = useState(false);
@@ -62,10 +64,17 @@ export default function CalendarScreen() {
   const [filterVisible, setFilterVisible] = useState(false);
   const [showPastEntries, setShowPastEntries] = useState(true);
 
-  const sections = useMemo<SectionType[]>(
-    () => getMockCalendarSections(mode),
-    [mode],
+  const { sections, loading, error, refetch } = useCalendarData(
+    mode,
+    api.fetchMyEntries,
+    api.fetchReminders,
   );
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const goBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -86,7 +95,7 @@ export default function CalendarScreen() {
     (action: AddAction) => {
       if (action === "create_entry" || action === "quick_entry") {
         // In a real app: create entry for addSheetDateISO and navigate to it
-        router.push("/(home)/journals");
+        router.push("/(home)/(tabs)/journals");
       } else if (action === "schedule_reminder") {
         // Open reminder edit (mock: just close)
         closeAddSheet();
@@ -265,16 +274,52 @@ export default function CalendarScreen() {
       </View>
 
       {/* Week sections */}
-      <FlatList<SectionType>
-        data={sections}
-        keyExtractor={keyExtractor}
-        renderItem={renderWeekBlock}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      />
+      {error ? (
+        <View style={[styles.errorWrap, { paddingTop: insets.top + 60 }]}>
+          <Text style={[styles.errorText, { color: colors.mutedForeground }]}>
+            {error}
+          </Text>
+          <Pressable
+            onPress={() => refetch()}
+            style={({ pressed }) => [
+              styles.retryBtn,
+              { backgroundColor: colors.primary },
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            <Text
+              style={[styles.retryBtnText, { color: colors.primaryForeground }]}
+            >
+              Retry
+            </Text>
+          </Pressable>
+        </View>
+      ) : loading && sections.length === 0 ? (
+        <View style={[styles.loadingWrap, { paddingTop: insets.top + 60 }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+            Loading calendar…
+          </Text>
+        </View>
+      ) : (
+        <FlatList<SectionType>
+          data={sections}
+          keyExtractor={keyExtractor}
+          renderItem={renderWeekBlock}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        />
+      )}
 
       <AddActionSheet
         visible={addSheetVisible}
@@ -381,6 +426,35 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 12,
     paddingTop: 12,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
+  },
+  errorWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  errorText: {
+    fontSize: 15,
+    textAlign: "center",
+  },
+  retryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: radius.lg,
+  },
+  retryBtnText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   weekBlock: {
     borderRadius: radius.lg,

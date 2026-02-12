@@ -85,7 +85,7 @@ export default function MoreScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              // TODO: navigate to membership/upgrade
+              router.push("/(home)/subscription");
             }}
             style={({ pressed }) => [
               styles.membershipCard,
@@ -114,7 +114,7 @@ export default function MoreScreen() {
             <View style={styles.membershipCardInner}>
               <View style={styles.membershipCardText}>
                 <Text style={styles.membershipCardTitle}>
-                  UPGRADE YOUR MEMEBRSHIP
+                  UPGRADE YOUR MEMBERSHIP
                 </Text>
                 <Text style={styles.membershipCardSubtitle}>
                   Upgrade to unlock all features
@@ -320,19 +320,19 @@ export default function MoreScreen() {
               <MenuRow
                 icon="card-outline"
                 label="MEMBERSHIP SERVICES"
-                onPress={() => {}}
+                onPress={() => router.push("/(home)/membership-services")}
                 colors={colors}
               />
               <MenuRow
                 icon="book-outline"
                 label="TUTORIAL"
-                onPress={() => {}}
+                onPress={() => router.push("/(home)/tutorial")}
                 colors={colors}
               />
               <MenuRow
                 icon="information-circle-outline"
                 label="ABOUT"
-                onPress={() => {}}
+                onPress={() => router.push("/(home)/about")}
                 colors={colors}
                 last
               />

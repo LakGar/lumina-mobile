@@ -1,12 +1,17 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, radius } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ApiError } from "@/lib/api";
+import { useClerk } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -18,19 +23,83 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const PADDING_H = 20;
+const STORAGE_KEY_AI = "@privacy/ai_suggestions";
+const STORAGE_KEY_PROMPTS = "@privacy/store_prompts";
+const STORAGE_KEY_ANALYTICS = "@privacy/analytics";
 
 export default function PrivacySettingsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
+  const api = useApi();
+  const { signOut } = useClerk();
 
   const [aiSuggestions, setAiSuggestions] = useState(true);
   const [storePromptsForPersonalization, setStorePromptsForPersonalization] =
     useState(false);
   const [analyticsAndImprovement, setAnalyticsAndImprovement] = useState(true);
+  const [deleting, setDeleting] = useState<"journal" | "ai" | "all" | null>(
+    null,
+  );
+  const [loadingToggles, setLoadingToggles] = useState(true);
 
-  const goBack = () => router.back();
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const [ai, prompts, analytics] = await Promise.all([
+            AsyncStorage.getItem(STORAGE_KEY_AI),
+            AsyncStorage.getItem(STORAGE_KEY_PROMPTS),
+            AsyncStorage.getItem(STORAGE_KEY_ANALYTICS),
+          ]);
+          if (cancelled) return;
+          if (ai !== null) setAiSuggestions(ai === "true");
+          if (prompts !== null)
+            setStorePromptsForPersonalization(prompts === "true");
+          if (analytics !== null)
+            setAnalyticsAndImprovement(analytics === "true");
+        } catch {
+          // keep defaults
+        } finally {
+          if (!cancelled) setLoadingToggles(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!loadingToggles) {
+      AsyncStorage.setItem(STORAGE_KEY_AI, String(aiSuggestions)).catch(
+        () => {},
+      );
+    }
+  }, [aiSuggestions, loadingToggles]);
+  useEffect(() => {
+    if (!loadingToggles) {
+      AsyncStorage.setItem(
+        STORAGE_KEY_PROMPTS,
+        String(storePromptsForPersonalization),
+      ).catch(() => {});
+    }
+  }, [storePromptsForPersonalization, loadingToggles]);
+  useEffect(() => {
+    if (!loadingToggles) {
+      AsyncStorage.setItem(
+        STORAGE_KEY_ANALYTICS,
+        String(analyticsAndImprovement),
+      ).catch(() => {});
+    }
+  }, [analyticsAndImprovement, loadingToggles]);
+
+  const goBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.back();
+  }, [router]);
 
   const confirmDelete = (
     title: string,
@@ -48,9 +117,21 @@ export default function PrivacySettingsScreen() {
     confirmDelete(
       "Delete journal data",
       "This will permanently delete all your journal entries. This cannot be undone.",
-      () => {
-        // TODO: wire to actual delete
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      async () => {
+        setDeleting("journal");
+        try {
+          await api.deleteMyJournalData();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert("Done", "All journal data has been deleted.");
+        } catch (e) {
+          const msg =
+            e instanceof ApiError && (e.status === 404 || e.status === 501)
+              ? "This feature is not available yet. Please try again later."
+              : "Could not delete journal data. Please try again.";
+          Alert.alert("Error", msg);
+        } finally {
+          setDeleting(null);
+        }
       },
     );
   };
@@ -60,9 +141,22 @@ export default function PrivacySettingsScreen() {
     confirmDelete(
       "Delete AI data",
       "This will delete stored prompts and AI-related data used for personalization.",
-      () => {
-        setStorePromptsForPersonalization(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      async () => {
+        setDeleting("ai");
+        try {
+          await api.deleteMyAiData();
+          setStorePromptsForPersonalization(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert("Done", "AI data has been deleted.");
+        } catch (e) {
+          const msg =
+            e instanceof ApiError && (e.status === 404 || e.status === 501)
+              ? "This feature is not available yet. Please try again later."
+              : "Could not delete AI data. Please try again.";
+          Alert.alert("Error", msg);
+        } finally {
+          setDeleting(null);
+        }
       },
     );
   };
@@ -71,10 +165,22 @@ export default function PrivacySettingsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     confirmDelete(
       "Delete all data",
-      "This will permanently delete all your data including journals, preferences, and account data. This cannot be undone.",
-      () => {
-        // TODO: wire to full account/data wipe
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      "This will permanently delete all your data including journals, preferences, and account data. You will be signed out. This cannot be undone.",
+      async () => {
+        setDeleting("all");
+        try {
+          await api.deleteAllMyData();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          await signOut();
+          router.replace("/(auth)/sign-in");
+        } catch (e) {
+          const msg =
+            e instanceof ApiError && (e.status === 404 || e.status === 501)
+              ? "This feature is not available yet. Please try again later."
+              : "Could not delete all data. Please try again.";
+          Alert.alert("Error", msg);
+          setDeleting(null);
+        }
       },
     );
   };
@@ -165,6 +271,8 @@ export default function PrivacySettingsScreen() {
                 }}
                 trackColor={{ false: colors.muted, true: colors.primary }}
                 thumbColor={colors.primaryForeground}
+                accessibilityLabel="AI suggestions"
+                accessibilityRole="switch"
               />
             </View>
             <View style={[styles.settingRow, styles.settingRowLast]}>
@@ -196,6 +304,8 @@ export default function PrivacySettingsScreen() {
                 }}
                 trackColor={{ false: colors.muted, true: colors.primary }}
                 thumbColor={colors.primaryForeground}
+                accessibilityLabel="Store prompts for personalization"
+                accessibilityRole="switch"
               />
             </View>
           </View>
@@ -245,6 +355,8 @@ export default function PrivacySettingsScreen() {
                 }}
                 trackColor={{ false: colors.muted, true: colors.primary }}
                 thumbColor={colors.primaryForeground}
+                accessibilityLabel="Analytics and improvement"
+                accessibilityRole="switch"
               />
             </View>
           </View>
@@ -265,10 +377,13 @@ export default function PrivacySettingsScreen() {
           >
             <Pressable
               onPress={handleDeleteJournalData}
+              disabled={deleting !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Delete journal data"
               style={({ pressed }) => [
                 styles.dangerRow,
                 { borderBottomColor: colors.border },
-                pressed && { opacity: 0.7 },
+                (pressed || deleting !== null) && { opacity: 0.7 },
               ]}
             >
               <Ionicons
@@ -279,18 +394,25 @@ export default function PrivacySettingsScreen() {
               <Text style={[styles.dangerLabel, { color: colors.destructive }]}>
                 Delete journal data
               </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.destructive}
-              />
+              {deleting === "journal" ? (
+                <ActivityIndicator size="small" color={colors.destructive} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.destructive}
+                />
+              )}
             </Pressable>
             <Pressable
               onPress={handleDeleteAiData}
+              disabled={deleting !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Delete AI data"
               style={({ pressed }) => [
                 styles.dangerRow,
                 { borderBottomColor: colors.border },
-                pressed && { opacity: 0.7 },
+                (pressed || deleting !== null) && { opacity: 0.7 },
               ]}
             >
               <Ionicons
@@ -301,18 +423,25 @@ export default function PrivacySettingsScreen() {
               <Text style={[styles.dangerLabel, { color: colors.destructive }]}>
                 Delete AI data
               </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.destructive}
-              />
+              {deleting === "ai" ? (
+                <ActivityIndicator size="small" color={colors.destructive} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.destructive}
+                />
+              )}
             </Pressable>
             <Pressable
               onPress={handleDeleteAllData}
+              disabled={deleting !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Delete all data"
               style={({ pressed }) => [
                 styles.dangerRow,
                 styles.dangerRowLast,
-                pressed && { opacity: 0.7 },
+                (pressed || deleting !== null) && { opacity: 0.7 },
               ]}
             >
               <Ionicons
@@ -323,11 +452,15 @@ export default function PrivacySettingsScreen() {
               <Text style={[styles.dangerLabel, { color: colors.destructive }]}>
                 Delete all data
               </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.destructive}
-              />
+              {deleting === "all" ? (
+                <ActivityIndicator size="small" color={colors.destructive} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.destructive}
+                />
+              )}
             </Pressable>
           </View>
         </View>

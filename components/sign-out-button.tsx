@@ -1,3 +1,5 @@
+import { clearAll } from "@/lib/cache";
+import { safeLogError } from "@/lib/safe-log";
 import { ThemedText } from "@/components/themed-text";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { useClerk } from "@clerk/clerk-expo";
@@ -12,10 +14,11 @@ export const SignOutButton = () => {
 
   const handleSignOut = async () => {
     try {
+      clearAll();
       await signOut();
       router.replace("/");
     } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+      safeLogError("Sign out error", err);
     }
   };
 

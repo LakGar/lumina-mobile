@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSettingsProvider } from "@/contexts/dashboard-settings-context";
 import { ThemeProvider as AppThemeProvider } from "@/contexts/theme-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -41,10 +42,12 @@ function RootContent() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppThemeProvider>
-        <RootContent />
-      </AppThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AppThemeProvider>
+          <RootContent />
+        </AppThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

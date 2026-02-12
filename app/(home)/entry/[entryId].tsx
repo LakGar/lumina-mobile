@@ -1,16 +1,20 @@
 import { ThemedView } from "@/components/themed-view";
-import { LEXICAL_EDITOR_HTML } from "@/constants/lexical-editor-html";
-import { getEntryById, setEntryOverride } from "@/constants/mock-journals";
 import { Colors, radius } from "@/constants/theme";
+import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import type { JournalEntry } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import { isValidEntryId } from "@/lib/validate-ids";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { BlurView } from "expo-blur";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -21,11 +25,20 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
 
 const PADDING_H = 16;
-const AUTO_SAVE_DEBOUNCE_MS = 1000;
+const DRAFT_PERSIST_DEBOUNCE_MS = 800;
+const DRAFT_KEY_PREFIX = "@lumina/entry-draft/";
 
 const MOOD_OPTIONS = [
   "calm",
@@ -38,22 +51,7 @@ const MOOD_OPTIONS = [
   "tired",
 ];
 
-/** If body is plain text (legacy), wrap for Quill. Otherwise use as HTML. */
-function bodyForEditor(body: string | undefined): string {
-  if (!body || !body.trim()) return "<p><br></p>";
-  if (body.trimStart().startsWith("<")) return body;
-  return (
-    "<p>" +
-    body
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "</p><p>") +
-    "</p>"
-  );
-}
-
-/** Strip HTML for plain-text editing fallback */
+/** Strip HTML to plain text when loading legacy rich-text entries */
 function bodyPlainFromHtml(html: string | undefined): string {
   if (!html || !html.trim()) return "";
   if (!html.trimStart().startsWith("<")) return html;
@@ -69,136 +67,287 @@ function bodyPlainFromHtml(html: string | undefined): string {
 }
 
 export default function EntryDetailScreen() {
-  const { entryId } = useLocalSearchParams<{
-    entryId: string;
-    journalId?: string;
-  }>();
+  const { entryId: rawEntryId, journalId: rawJournalId } =
+    useLocalSearchParams<{
+      entryId: string;
+      journalId?: string;
+    }>();
+  const entryId = isValidEntryId(rawEntryId) ? rawEntryId!.trim() : null;
+  const journalId = rawJournalId?.trim() || null;
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
+  const api = useApi();
 
-  const entry = entryId ? getEntryById(entryId) : undefined;
-
-  const [title, setTitle] = useState(entry?.title ?? "");
-  const [body, setBody] = useState(entry?.body ?? "");
-  const [mood, setMood] = useState(entry?.mood ?? "");
-  const [tags, setTags] = useState<string[]>(entry?.tags ?? []);
-  const [images, setImages] = useState<string[]>(entry?.images ?? []);
+  const [entry, setEntry] = useState<JournalEntry | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [mood, setMood] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
-  const [editorFocused, setEditorFocused] = useState(false);
-  const [editorReady, setEditorReady] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [tagInputValue, setTagInputValue] = useState("");
+  const [aiSummaryText, setAiSummaryText] = useState<string | null>(null);
+  const [aiQualityScore, setAiQualityScore] = useState<number | null>(null);
+  const [aiMoodLabel, setAiMoodLabel] = useState<string | null>(null);
+  const [aiTags, setAiTags] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [goDeeperLoading, setGoDeeperLoading] = useState(false);
+  const [goDeeperQuestions, setGoDeeperQuestions] = useState<string[]>([]);
+  const [goDeeperVisible, setGoDeeperVisible] = useState(false);
+  const bodyInputRef = useRef<TextInput>(null);
+  const draftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleRef = useRef("");
+  const bodyRef = useRef("");
+  const moodRef = useRef("");
+  const tagsRef = useRef<string[]>([]);
+  const savingRef = useRef(false);
 
-  const webViewRef = useRef<WebView>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialContentSet = useRef(false);
-
-  useEffect(() => {
-    if (entry) {
-      setTitle(entry.title ?? "");
-      setBody(entry.body ?? "");
-      setMood(entry.mood ?? "");
-      setTags(entry.tags ?? []);
-      setImages(entry.images ?? []);
-    }
-  }, [entry?.id]);
-
-  const performSave = useCallback(() => {
+  const loadingRef = useRef(false);
+  const loadEntry = useCallback(async () => {
     if (!entryId) return;
-    setSaveStatus("saving");
-    setEntryOverride(entryId, {
-      title: title.trim() || undefined,
-      body: body.trim() || undefined,
-      mood: mood.trim() || undefined,
-      tags: tags.length > 0 ? tags : undefined,
-      images: images.length > 0 ? images : undefined,
-      updatedAt: new Date().toISOString(),
-    });
-    setSaveStatus("saved");
-    const t = setTimeout(() => setSaveStatus("idle"), 2000);
-    return () => clearTimeout(t);
-  }, [entryId, title, body, mood, tags, images]);
-
-  const scheduleSave = useCallback(() => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      saveTimeoutRef.current = null;
-      performSave();
-    }, AUTO_SAVE_DEBOUNCE_MS);
-  }, [performSave]);
-
-  useEffect(() => {
-    scheduleSave();
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
-    };
-  }, [title, body, mood, tags, images, scheduleSave]);
-
-  useEffect(() => {
-    return () => {
-      performSave();
-    };
-  }, [performSave]);
-
-  const goBack = useCallback(() => {
-    performSave();
-    router.back();
-  }, [performSave, router]);
-
-  const handleWebViewMessage = useCallback(
-    (event: { nativeEvent: { data: string } }) => {
-      try {
-        const msg = JSON.parse(event.nativeEvent.data);
-        if (msg.type === "ready") {
-          setEditorReady(true);
-          const initial = bodyForEditor(body);
-          const payload = JSON.stringify(initial);
-          webViewRef.current?.injectJavaScript(
-            `(function(){ try { window.__editorCommand('setContent', ${payload}); } catch(e){} })(); true;`,
-          );
-          initialContentSet.current = true;
-        } else if (msg.type === "focus") setEditorFocused(true);
-        else if (msg.type === "blur") setEditorFocused(false);
-        else if (msg.type === "content" && msg.html !== undefined) {
-          setBody(msg.html);
-          scheduleSave();
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoading(true);
+    try {
+      const e = await api.fetchEntry(entryId);
+      if (e) {
+        setEntry(e);
+        setTitle(e.title ?? "");
+        const rawBody = e.body ?? "";
+        const text = rawBody.trimStart().startsWith("<")
+          ? bodyPlainFromHtml(rawBody)
+          : rawBody;
+        const trimmed = text.trim();
+        const displayBody = trimmed === "." ? "" : trimmed || "";
+        setBody(displayBody);
+        setMood(e.mood ?? "");
+        setTags(e.tags ?? []);
+        setImages(e.images ?? []);
+        titleRef.current = e.title ?? "";
+        bodyRef.current = displayBody;
+        moodRef.current = e.mood ?? "";
+        tagsRef.current = e.tags ?? [];
+        const draftKey = DRAFT_KEY_PREFIX + entryId;
+        const draftJson = await AsyncStorage.getItem(draftKey);
+        if (draftJson) {
+          try {
+            const draft = JSON.parse(draftJson) as {
+              title?: string;
+              body?: string;
+              mood?: string;
+              tags?: string[];
+            };
+            if (
+              draft.title !== undefined ||
+              draft.body !== undefined ||
+              draft.mood !== undefined ||
+              (draft.tags && draft.tags.length > 0)
+            ) {
+              const t = draft.title ?? "";
+              const b = draft.body ?? "";
+              const m = draft.mood ?? "";
+              const tg = draft.tags ?? [];
+              setTitle(t);
+              setBody(b);
+              setMood(m);
+              setTags(tg);
+              titleRef.current = t;
+              bodyRef.current = b;
+              moodRef.current = m;
+              tagsRef.current = tg;
+            }
+          } catch {
+            // ignore invalid draft
+          }
         }
-      } catch (_) {}
-    },
-    [body, scheduleSave],
+      } else {
+        setEntry(null);
+      }
+    } catch {
+      setEntry(null);
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
+    }
+  }, [entryId, api]);
+
+  const loadEntryRef = useRef(loadEntry);
+  loadEntryRef.current = loadEntry;
+  useFocusEffect(
+    useCallback(() => {
+      loadEntryRef.current();
+    }, []),
   );
 
-  const runEditorCommand = useCallback((cmd: string, value?: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const arg = value !== undefined ? `, ${JSON.stringify(value)}` : "";
-    webViewRef.current?.injectJavaScript(
-      `(function(){ try { window.__editorCommand('${cmd}'${arg}); } catch(e){} })(); true;`,
-    );
-  }, []);
+  titleRef.current = title;
+  bodyRef.current = body;
+  moodRef.current = mood;
+  tagsRef.current = tags;
+
+  const performSave = useCallback(async () => {
+    if (!entryId || savingRef.current) return;
+    savingRef.current = true;
+    setSaveStatus("saving");
+    const content = bodyRef.current.trim() || " ";
+    const moodVal = moodRef.current.trim() || undefined;
+    const tagsVal = tagsRef.current.length > 0 ? tagsRef.current : undefined;
+    try {
+      await api.updateEntry(entryId, {
+        content,
+        mood: moodVal,
+        tags: tagsVal,
+      });
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+      await AsyncStorage.removeItem(DRAFT_KEY_PREFIX + entryId);
+    } catch {
+      setSaveStatus("error");
+    } finally {
+      savingRef.current = false;
+    }
+  }, [entryId, api]);
+
+  useEffect(() => {
+    if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
+    draftTimeoutRef.current = setTimeout(() => {
+      draftTimeoutRef.current = null;
+      if (!entryId) return;
+      AsyncStorage.setItem(
+        DRAFT_KEY_PREFIX + entryId,
+        JSON.stringify({
+          title: titleRef.current,
+          body: bodyRef.current,
+          mood: moodRef.current,
+          tags: tagsRef.current,
+        }),
+      ).catch(() => {});
+    }, DRAFT_PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (draftTimeoutRef.current) {
+        clearTimeout(draftTimeoutRef.current);
+        draftTimeoutRef.current = null;
+      }
+    };
+  }, [entryId, title, body, mood, tags]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "background" && entryId) {
+        performSave();
+      }
+    });
+    return () => sub.remove();
+  }, [entryId, performSave]);
+
+  const goBack = useCallback(async () => {
+    await performSave();
+    router.back();
+  }, [performSave, router]);
 
   const addTag = useCallback(() => {
     const t = tagInputValue.trim().replace(/^#/, "");
     if (t && !tags.includes(t)) {
       setTags((prev) => [...prev, t]);
       setTagInputValue("");
-      scheduleSave();
     }
-  }, [tagInputValue, tags, scheduleSave]);
+  }, [tagInputValue, tags]);
 
-  const removeTag = useCallback(
-    (tag: string) => {
-      setTags((prev) => prev.filter((t) => t !== tag));
-      scheduleSave();
+  const removeTag = useCallback((tag: string) => {
+    setTags((prev) => prev.filter((t) => t !== tag));
+  }, []);
+
+  const handleRegenerateAi = useCallback(async () => {
+    if (!entryId || aiLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAiError(null);
+    setAiLoading(true);
+    try {
+      await performSave();
+      const result = await api.regenerateEntryAi(entryId);
+      setAiSummaryText(result.summaryText);
+      setAiQualityScore(result.qualityScore);
+      setAiMoodLabel(result.moodLabel);
+      setAiTags(result.tagsAi.map((t) => t.tag));
+      if (result.moodLabel) setMood(result.moodLabel);
+      if (result.entry.tags?.length) setTags(result.entry.tags ?? []);
+    } catch (e) {
+      const msg =
+        e instanceof ApiError && e.status === 502
+          ? "AI is temporarily unavailable"
+          : e instanceof ApiError && e.status === 404
+            ? "Entry not found"
+            : "Something went wrong";
+      setAiError(msg);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [entryId, api, aiLoading, performSave]);
+
+  const handleGoDeeper = useCallback(async () => {
+    if (!entryId || goDeeperLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setGoDeeperLoading(true);
+    setGoDeeperQuestions([]);
+    try {
+      await performSave();
+      const { questions } = await api.goDeeper(entryId, body.trim() || null);
+      setGoDeeperQuestions(questions);
+      setGoDeeperVisible(true);
+    } catch (e) {
+      const msg =
+        e instanceof ApiError && e.status === 502
+          ? "AI is temporarily unavailable"
+          : e instanceof ApiError && e.status === 404
+            ? "Entry not found"
+            : "Something went wrong";
+      setGoDeeperVisible(true);
+      setGoDeeperQuestions([msg]);
+    } finally {
+      setGoDeeperLoading(false);
+    }
+  }, [entryId, api, body, goDeeperLoading, performSave]);
+
+  const pickQuestion = useCallback(
+    (question: string) => {
+      if (
+        question.startsWith("AI is") ||
+        question.startsWith("Entry") ||
+        question.startsWith("Something")
+      )
+        return;
+      const sep = body.trim() ? "\n\n" : "";
+      setBody((prev) => prev.trim() + sep + question);
+      setGoDeeperVisible(false);
+      bodyInputRef.current?.focus();
     },
-    [scheduleSave],
+    [body],
   );
+
+  const skeletonOpacity = useSharedValue(0.4);
+  useEffect(() => {
+    if (!aiLoading) return;
+    skeletonOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 600 }),
+        withTiming(0.35, { duration: 600 }),
+      ),
+      -1,
+      true,
+    );
+    return () => {
+      skeletonOpacity.value = withTiming(0.4, { duration: 200 });
+    };
+  }, [aiLoading, skeletonOpacity]);
+  const skeletonStyle = useAnimatedStyle(() => ({
+    opacity: skeletonOpacity.value,
+  }));
 
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -211,13 +360,33 @@ export default function EntryDetailScreen() {
     });
     if (!result.canceled && result.assets?.[0]?.uri) {
       const uri = result.assets[0].uri;
-      runEditorCommand("insertImage", uri);
       setImages((prev) => (prev.includes(uri) ? prev : [...prev, uri]));
-      scheduleSave();
     }
-  }, [runEditorCommand, scheduleSave]);
+  }, []);
 
-  if (!entryId || !entry) {
+  if (!entryId) {
+    return (
+      <ThemedView style={styles.container}>
+        <Text style={styles.notFound}>Entry not found.</Text>
+        <Pressable onPress={() => router.back()}>
+          <Text style={{ color: colors.primary }}>Go back</Text>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  if (loading && !entry) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+          Loading…
+        </Text>
+      </ThemedView>
+    );
+  }
+
+  if (!entry) {
     return (
       <ThemedView style={styles.container}>
         <Text style={styles.notFound}>Entry not found.</Text>
@@ -305,297 +474,340 @@ export default function EntryDetailScreen() {
             {
               paddingHorizontal: PADDING_H,
               paddingTop: 12,
-              paddingBottom: insets.bottom + (editorFocused ? 120 : 24),
+              paddingBottom: insets.bottom + 24,
             },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <TextInput
-            style={[styles.titleInput, { color: colors.foreground }]}
-            placeholder="Title"
-            placeholderTextColor={colors.mutedForeground}
-            value={title}
-            onChangeText={(t) => {
-              setTitle(t);
-              scheduleSave();
-            }}
-            maxLength={200}
-            returnKeyType="next"
-            onSubmitEditing={() => runEditorCommand("focus")}
-            blurOnSubmit={false}
-          />
-
-          {/* Body editor right below title so it's at the top of the entry area */}
-          <Text style={[styles.bodyLabel, { color: colors.mutedForeground }]}>
-            Body
-          </Text>
-          <View
-            style={[
-              styles.webViewContainer,
-              {
-                backgroundColor: colors.popover ?? colors.card,
-                borderColor: colors.border,
-              },
-            ]}
+          <Animated.View
+            entering={FadeInDown.duration(320).springify().damping(18)}
+            style={styles.notesBlock}
           >
-            <WebView
-              ref={webViewRef}
-              source={{ html: LEXICAL_EDITOR_HTML }}
-              originWhitelist={["*"]}
-              style={[
-                styles.webViewBody,
-                { backgroundColor: colors.popover ?? colors.card },
-              ]}
-              scrollEnabled={true}
-              onMessage={handleWebViewMessage}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              keyboardDisplayRequiresUserAction={false}
-              onLoadEnd={() => {
-                if (!initialContentSet.current) {
-                  const initial = bodyForEditor(body);
-                  const payload = JSON.stringify(initial);
-                  webViewRef.current?.injectJavaScript(
-                    `(function(){ try { window.__editorCommand('setContent', ${payload}); } catch(e){} })(); true;`,
-                  );
-                  initialContentSet.current = true;
-                }
-              }}
+            <TextInput
+              style={[styles.titleInput, { color: colors.foreground }]}
+              placeholder="Title"
+              placeholderTextColor={colors.mutedForeground}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={200}
+              returnKeyType="next"
+              onSubmitEditing={() => bodyInputRef.current?.focus()}
+              blurOnSubmit={false}
             />
-          </View>
+            <TextInput
+              ref={bodyInputRef}
+              style={[
+                styles.bodyInput,
+                {
+                  color: colors.foreground,
+                  backgroundColor: colors.popover ?? colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="Write your thoughts…"
+              placeholderTextColor={colors.mutedForeground}
+              value={body}
+              onChangeText={setBody}
+              multiline
+              textAlignVertical="top"
+              scrollEnabled={false}
+            />
+          </Animated.View>
 
-          {images.length > 0 ? (
-            <View style={styles.inlineImages}>
-              {images.map((uri, idx) => (
-                <View key={uri + idx} style={styles.inlineImageWrap}>
-                  <Image
-                    source={{ uri }}
-                    style={styles.inlineImage}
-                    contentFit="cover"
-                  />
-                  <Pressable
-                    onPress={() => {
-                      setImages((p) => p.filter((_, i) => i !== idx));
-                      scheduleSave();
-                    }}
-                    style={styles.inlineImageRemove}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name="close-circle"
-                      size={22}
-                      color={colors.destructive}
+          <Animated.View
+            entering={FadeInDown.duration(280)
+              .springify()
+              .damping(18)
+              .delay(80)}
+          >
+            <Pressable
+              onPress={pickImage}
+              style={({ pressed }) => [
+                styles.addPhotoRow,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Ionicons
+                name="image-outline"
+                size={18}
+                color={colors.mutedForeground}
+              />
+              <Text
+                style={[styles.addPhotoText, { color: colors.mutedForeground }]}
+              >
+                Add photo
+              </Text>
+            </Pressable>
+
+            {images.length > 0 ? (
+              <View style={styles.inlineImages}>
+                {images.map((uri, idx) => (
+                  <View key={uri + idx} style={styles.inlineImageWrap}>
+                    <Image
+                      source={{ uri }}
+                      style={styles.inlineImage}
+                      contentFit="cover"
                     />
+                    <Pressable
+                      onPress={() => {
+                        setImages((p) => p.filter((_, i) => i !== idx));
+                      }}
+                      style={styles.inlineImageRemove}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={22}
+                        color={colors.destructive}
+                      />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={() => setDetailsVisible(true)}
+              style={({ pressed }) => [
+                styles.metaRow,
+                { borderTopColor: colors.border },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <Ionicons
+                name="pricetag-outline"
+                size={16}
+                color={colors.mutedForeground}
+              />
+              <Text
+                style={[styles.metaRowText, { color: colors.mutedForeground }]}
+                numberOfLines={1}
+              >
+                {detailsSummary}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.mutedForeground}
+              />
+            </Pressable>
+
+            {/* AI Reflection: Generate AI + Go deeper */}
+            <Animated.View
+              entering={FadeInDown.duration(300)
+                .springify()
+                .damping(18)
+                .delay(120)}
+              style={[styles.aiBlock, { borderTopColor: colors.border }]}
+            >
+              <View style={styles.aiBlockHeader}>
+                <Ionicons name="sparkles" size={18} color={colors.primary} />
+                <Text
+                  style={[styles.aiBlockTitle, { color: colors.foreground }]}
+                >
+                  Reflection
+                </Text>
+              </View>
+              {aiLoading && (
+                <Animated.View style={[styles.aiSkeleton, skeletonStyle]}>
+                  <View
+                    style={[
+                      styles.aiSkeletonLine,
+                      { backgroundColor: colors.muted },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.aiSkeletonLine,
+                      styles.aiSkeletonLineShort,
+                      { backgroundColor: colors.muted },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.aiSkeletonText,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Analyzing reflection…
+                  </Text>
+                </Animated.View>
+              )}
+              {!aiLoading && aiError && (
+                <View style={styles.aiErrorRow}>
+                  <Text
+                    style={[styles.aiErrorText, { color: colors.destructive }]}
+                  >
+                    {aiError}
+                  </Text>
+                  <Pressable
+                    onPress={handleRegenerateAi}
+                    style={({ pressed }) => [
+                      styles.aiRetryBtn,
+                      { backgroundColor: colors.primary },
+                      pressed && { opacity: 0.85 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.aiRetryBtnText,
+                        { color: colors.primaryForeground },
+                      ]}
+                    >
+                      Retry
+                    </Text>
                   </Pressable>
                 </View>
-              ))}
-            </View>
-          ) : null}
-
-          <Pressable
-            onPress={() => setDetailsVisible(true)}
-            style={({ pressed }) => [
-              styles.metaRow,
-              { borderTopColor: colors.border },
-              pressed && { opacity: 0.8 },
-            ]}
-          >
-            <Ionicons
-              name="pricetag-outline"
-              size={16}
-              color={colors.mutedForeground}
-            />
-            <Text
-              style={[styles.metaRowText, { color: colors.mutedForeground }]}
-              numberOfLines={1}
-            >
-              {detailsSummary}
-            </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color={colors.mutedForeground}
-            />
-          </Pressable>
+              )}
+              {!aiLoading &&
+                !aiError &&
+                (aiSummaryText ||
+                  aiQualityScore != null ||
+                  aiMoodLabel ||
+                  aiTags.length > 0) && (
+                  <Animated.View entering={FadeIn.duration(280)}>
+                    {aiSummaryText ? (
+                      <Text
+                        style={[styles.aiSummary, { color: colors.foreground }]}
+                      >
+                        {aiSummaryText}
+                      </Text>
+                    ) : null}
+                    {aiMoodLabel || aiTags.length > 0 ? (
+                      <View style={styles.aiPillsRow}>
+                        {aiMoodLabel ? (
+                          <View
+                            style={[
+                              styles.aiPill,
+                              { backgroundColor: colors.primary + "22" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.aiPillText,
+                                { color: colors.primary },
+                              ]}
+                            >
+                              {aiMoodLabel}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {aiTags.slice(0, 5).map((t) => (
+                          <View
+                            key={t}
+                            style={[
+                              styles.aiPill,
+                              { backgroundColor: colors.muted },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.aiPillText,
+                                { color: colors.foreground },
+                              ]}
+                            >
+                              #{t}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    {aiQualityScore != null && (
+                      <Text
+                        style={[
+                          styles.aiScore,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        Reflection score: {aiQualityScore}/100
+                      </Text>
+                    )}
+                  </Animated.View>
+                )}
+              <View style={styles.aiActionsRow}>
+                <Pressable
+                  onPress={handleRegenerateAi}
+                  disabled={aiLoading}
+                  style={({ pressed }) => [
+                    styles.aiActionBtn,
+                    { backgroundColor: colors.primary },
+                    (aiLoading || pressed) && { opacity: 0.8 },
+                  ]}
+                >
+                  {aiLoading ? (
+                    <Text
+                      style={[
+                        styles.aiActionBtnText,
+                        { color: colors.primaryForeground },
+                      ]}
+                    >
+                      Analyzing…
+                    </Text>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="sparkles-outline"
+                        size={16}
+                        color={colors.primaryForeground}
+                      />
+                      <Text
+                        style={[
+                          styles.aiActionBtnText,
+                          { color: colors.primaryForeground },
+                        ]}
+                      >
+                        {aiSummaryText ? "Refresh AI" : "Generate AI"}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={handleGoDeeper}
+                  disabled={goDeeperLoading || aiLoading}
+                  style={({ pressed }) => [
+                    styles.aiActionBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    },
+                    (goDeeperLoading || aiLoading || pressed) && {
+                      opacity: 0.8,
+                    },
+                  ]}
+                >
+                  {goDeeperLoading ? (
+                    <Text
+                      style={[
+                        styles.aiActionBtnText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      Getting prompts…
+                    </Text>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={16}
+                        color={colors.foreground}
+                      />
+                      <Text
+                        style={[
+                          styles.aiActionBtnText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        Go deeper
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </Animated.View>
+          </Animated.View>
         </ScrollView>
-
-        {editorFocused ? (
-          <View
-            style={[
-              styles.formatBarWrapper,
-              {
-                borderTopColor: colors.border,
-                paddingBottom: insets.bottom + 8,
-              },
-            ]}
-          >
-            <BlurView
-              intensity={70}
-              tint={colorScheme === "dark" ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-            <View
-              style={[styles.formatBar, { backgroundColor: "transparent" }]}
-              pointerEvents="box-none"
-            >
-              <Pressable
-                onPress={() => runEditorCommand("bold")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Bold"
-              >
-                <Text
-                  style={[
-                    styles.formatIcon,
-                    { color: colors.foreground, fontWeight: "700" },
-                  ]}
-                >
-                  B
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => runEditorCommand("italic")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Italic"
-              >
-                <Text
-                  style={[
-                    styles.formatIcon,
-                    {
-                      color: colors.foreground,
-                      fontStyle: "italic",
-                      fontWeight: "600",
-                    },
-                  ]}
-                >
-                  I
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => runEditorCommand("underline")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Underline"
-              >
-                <Text
-                  style={[
-                    styles.formatIcon,
-                    {
-                      color: colors.foreground,
-                      textDecorationLine: "underline",
-                    },
-                  ]}
-                >
-                  U
-                </Text>
-              </Pressable>
-              <View
-                style={[
-                  styles.formatBarDivider,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              <Pressable
-                onPress={() => runEditorCommand("bulletList")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Bullet list"
-              >
-                <Text style={[styles.formatIcon, { color: colors.foreground }]}>
-                  •
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => runEditorCommand("orderedList")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Numbered list"
-              >
-                <Text style={[styles.formatIcon, { color: colors.foreground }]}>
-                  1.
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => runEditorCommand("checklist")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Checklist"
-              >
-                <Text style={[styles.formatIcon, { color: colors.foreground }]}>
-                  ☐
-                </Text>
-              </Pressable>
-              <View
-                style={[
-                  styles.formatBarDivider,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              <Pressable
-                onPress={() => runEditorCommand("undo")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Undo"
-              >
-                <Ionicons
-                  name="arrow-undo"
-                  size={20}
-                  color={colors.foreground}
-                />
-              </Pressable>
-              <Pressable
-                onPress={() => runEditorCommand("redo")}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Redo"
-              >
-                <Ionicons
-                  name="arrow-redo"
-                  size={20}
-                  color={colors.foreground}
-                />
-              </Pressable>
-              <View
-                style={[
-                  styles.formatBarDivider,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              <Pressable
-                onPress={pickImage}
-                style={({ pressed }) => [
-                  styles.formatBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Add photo"
-              >
-                <Ionicons
-                  name="image-outline"
-                  size={22}
-                  color={colors.foreground}
-                />
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
       </KeyboardAvoidingView>
 
       <Modal
@@ -639,7 +851,6 @@ export default function EntryDetailScreen() {
                       key={m}
                       onPress={() => {
                         setMood(mood === m ? "" : m);
-                        scheduleSave();
                       }}
                       style={({ pressed }) => [
                         styles.detailsPill,
@@ -754,12 +965,101 @@ export default function EntryDetailScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Go deeper: questions list */}
+      <Modal
+        visible={goDeeperVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setGoDeeperVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setGoDeeperVisible(false)}
+        >
+          <Pressable
+            style={[
+              styles.detailsSheet,
+              { backgroundColor: colors.background },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View
+              style={[styles.detailsHandle, { backgroundColor: colors.border }]}
+            />
+            <Text style={[styles.goDeeperTitle, { color: colors.foreground }]}>
+              Go deeper
+            </Text>
+            <Text
+              style={[
+                styles.goDeeperSubtitle,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              Tap a question to add it to your entry
+            </Text>
+            <ScrollView
+              style={styles.goDeeperList}
+              showsVerticalScrollIndicator={false}
+            >
+              {goDeeperQuestions.map((q, i) => (
+                <Pressable
+                  key={i}
+                  onPress={() => pickQuestion(q)}
+                  style={({ pressed }) => [
+                    styles.goDeeperItem,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                    pressed && { opacity: 0.85 },
+                  ]}
+                >
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.goDeeperItemText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {q}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable
+              onPress={() => setGoDeeperVisible(false)}
+              style={({ pressed }) => [
+                styles.goDeeperCloseBtn,
+                { borderColor: colors.border },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.goDeeperCloseBtnText,
+                  { color: colors.foreground },
+                ]}
+              >
+                Close
+              </Text>
+            </Pressable>
+            <View style={{ height: insets.bottom + 16 }} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  centered: { justifyContent: "center", alignItems: "center" },
+  loadingText: { marginTop: 12 },
   notFound: { padding: 20 },
   header: {
     flexDirection: "row",
@@ -779,29 +1079,25 @@ const styles = StyleSheet.create({
   keyboardAvoid: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: {},
-  titleInput: {
-    fontSize: 28,
-    fontWeight: "600",
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-    marginBottom: 4,
-  },
-  bodyLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  webViewContainer: {
-    height: 280,
+  notesBlock: {
     marginBottom: 8,
+  },
+  titleInput: {
+    fontSize: 26,
+    fontWeight: "700",
+    paddingVertical: 6,
+    paddingHorizontal: 0,
+    marginBottom: 12,
+    letterSpacing: 0.2,
+  },
+  bodyInput: {
+    minHeight: 200,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderRadius: radius.md,
     borderWidth: 1,
-    overflow: "hidden",
-  },
-  webViewBody: {
-    height: 280,
+    fontSize: 17,
+    lineHeight: 24,
   },
   inlineImages: {
     flexDirection: "row",
@@ -812,6 +1108,14 @@ const styles = StyleSheet.create({
   inlineImageWrap: { position: "relative" },
   inlineImage: { width: 100, height: 100, borderRadius: radius.md },
   inlineImageRemove: { position: "absolute", top: -4, right: -4 },
+  addPhotoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  addPhotoText: { fontSize: 15 },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -821,20 +1125,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   metaRowText: { flex: 1, fontSize: 14 },
-  formatBarWrapper: {
-    overflow: "hidden",
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  formatBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 4,
-  },
-  formatBtn: { padding: 8 },
-  formatIcon: { fontSize: 18 },
-  formatBarDivider: { width: 1, height: 20, marginHorizontal: 4 },
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -900,4 +1190,93 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   detailsAddTagBtnText: { fontSize: 14, fontWeight: "600" },
+  aiBlock: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  aiBlockHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  aiBlockTitle: { fontSize: 16, fontWeight: "700" },
+  aiSkeleton: { paddingVertical: 12, gap: 8 },
+  aiSkeletonLine: {
+    height: 14,
+    borderRadius: 4,
+    width: "90%",
+  },
+  aiSkeletonLineShort: { width: "60%" },
+  aiSkeletonText: { fontSize: 13, marginTop: 4 },
+  aiErrorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  aiErrorText: { flex: 1, fontSize: 14 },
+  aiRetryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+  },
+  aiRetryBtnText: { fontSize: 14, fontWeight: "600" },
+  aiSummary: { fontSize: 15, lineHeight: 22, marginBottom: 10 },
+  aiPillsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  aiPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+  },
+  aiPillText: { fontSize: 13, fontWeight: "500" },
+  aiScore: { fontSize: 13, marginBottom: 12 },
+  aiActionsRow: { flexDirection: "row", gap: 10, marginTop: 4 },
+  aiActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+  },
+  aiActionBtnText: { fontSize: 14, fontWeight: "600" },
+  goDeeperTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 4,
+    paddingHorizontal: PADDING_H,
+  },
+  goDeeperSubtitle: {
+    fontSize: 13,
+    marginBottom: 16,
+    paddingHorizontal: PADDING_H,
+  },
+  goDeeperList: { maxHeight: 320, paddingHorizontal: PADDING_H },
+  goDeeperItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  goDeeperItemText: { flex: 1, fontSize: 15, lineHeight: 22 },
+  goDeeperCloseBtn: {
+    marginTop: 16,
+    marginHorizontal: PADDING_H,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  goDeeperCloseBtnText: { fontSize: 16, fontWeight: "600" },
 });

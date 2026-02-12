@@ -1,8 +1,4 @@
-import {
-  Icon,
-  Label,
-  NativeTabs,
-} from "expo-router/unstable-native-tabs";
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 
 export default function TabLayout() {
   return (
@@ -20,11 +16,21 @@ export default function TabLayout() {
         <Label>Journals</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more">
-        <Icon sf={{ default: "line.3.horizontal", selected: "line.3.horizontal.circle.fill" }} />
+        <Icon
+          sf={{
+            default: "line.3.horizontal",
+            selected: "line.3.horizontal.circle.fill",
+          }}
+        />
         <Label>More</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="chat">
-        <Icon sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }} />
+      <NativeTabs.Trigger name="ai-chat">
+        <Icon
+          sf={{
+            default: "bubble.left.and.bubble.right",
+            selected: "bubble.left.and.bubble.right.fill",
+          }}
+        />
         <Label>Chat</Label>
       </NativeTabs.Trigger>
     </NativeTabs>

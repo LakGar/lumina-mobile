@@ -34,6 +34,10 @@ export type TabHeaderProps = {
   overlay?: boolean;
   /** Optional right-side action (e.g. add icon for Journals). When set, shows a button that calls onPress. */
   rightAction?: { onPress: () => void; accessibilityLabel?: string };
+  /** Current streak (days). Only shown when >= 2; hide for 0 or 1 day streak. */
+  streak?: number;
+  /** Controlled selected date for home mode; when set with onDateChange, header uses these instead of internal state. */
+  selectedDate?: Date;
 };
 
 const HEADER_TOP_PADDING = 12;
@@ -51,6 +55,8 @@ export default function TabHeader({
   showWeekStrip = true,
   overlay = false,
   rightAction,
+  streak,
+  selectedDate: controlledSelectedDate,
 }: TabHeaderProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -67,14 +73,20 @@ export default function TabHeader({
     user?.fullName?.[0]?.toUpperCase() ||
     "?";
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [internalDate, setInternalDate] = useState(() => new Date());
+  const selectedDate = controlledSelectedDate ?? internalDate;
   const handleDateChange = useCallback(
     (date: Date) => {
-      setSelectedDate(date);
+      setInternalDate(date);
       onDateChange?.(date);
     },
     [onDateChange],
   );
+  useEffect(() => {
+    if (controlledSelectedDate != null) {
+      setInternalDate(controlledSelectedDate);
+    }
+  }, [controlledSelectedDate]);
 
   const goPrevDay = useCallback(() => {
     const next = addDays(selectedDate, -1);
@@ -234,7 +246,7 @@ export default function TabHeader({
                 </Text>
               )}
             </View>
-            {!isExplore && (
+            {!isExplore && streak != null && streak >= 2 && (
               <View
                 style={[styles.dailyStreak, { backgroundColor: colors.card }]}
               >
@@ -242,7 +254,7 @@ export default function TabHeader({
                 <Text
                   style={[styles.dailyStreakText, { color: colors.foreground }]}
                 >
-                  10
+                  {streak}
                 </Text>
               </View>
             )}

@@ -192,24 +192,17 @@ function generateMockItems(weekStarts: Date[]): CalendarItem[] {
   return items;
 }
 
-/** Build week sections for SectionList (current month ± 2 weeks) */
-export function getMockCalendarSections(
+/** Build week sections from a flat list of calendar items (entries + reminders) */
+export function buildCalendarSectionsFromItems(
+  weekStarts: Date[],
+  items: CalendarItem[],
   mode: "all" | "upcoming" | "history",
 ): CalendarWeekSection[] {
-  const now = new Date();
-  const start = startOfWeek(now);
-  const weekStarts: Date[] = [];
-  for (let i = -2; i <= 4; i++) {
-    weekStarts.push(addDays(start, i * 7));
-  }
-  const allItems = generateMockItems(weekStarts);
-  const byDate = groupItemsByDate(allItems);
-
+  const byDate = groupItemsByDate(items);
+  const todayISO = formatYYYYMMDD(new Date());
   const sections: CalendarWeekSection[] = [];
-  const todayISO = formatYYYYMMDD(now);
 
-  for (let w = 0; w < weekStarts.length; w++) {
-    const weekStart = weekStarts[w];
+  for (const weekStart of weekStarts) {
     const weekEnd = addDays(weekStart, 6);
     const weekKey = formatYYYYMMDD(weekStart);
     const weekNumber = getWeekNumber(weekStart);
@@ -247,11 +240,29 @@ export function getMockCalendarSections(
       dateRangeLabel: formatRange(weekStart, weekEnd),
       entriesCount,
       remindersCount,
-      streak: 14,
+      streak: 0,
       days,
     });
   }
 
+  return sections;
+}
+
+/** Build week sections for SectionList (current month ± 2 weeks) — mock data */
+export function getMockCalendarSections(
+  mode: "all" | "upcoming" | "history",
+): CalendarWeekSection[] {
+  const now = new Date();
+  const start = startOfWeek(now);
+  const weekStarts: Date[] = [];
+  for (let i = -2; i <= 4; i++) {
+    weekStarts.push(addDays(start, i * 7));
+  }
+  const allItems = generateMockItems(weekStarts);
+  const sections = buildCalendarSectionsFromItems(weekStarts, allItems, mode);
+  sections.forEach((s) => {
+    (s as { streak: number }).streak = 14;
+  });
   return sections;
 }
 

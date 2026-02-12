@@ -1,9 +1,12 @@
-import { DASHBOARD_METRICS, type DashboardMetric } from "@/constants/dashboard-metrics";
+import {
+  DASHBOARD_METRICS,
+  type DashboardMetric,
+} from "@/constants/dashboard-metrics";
 import { Colors, radius, Shadows } from "@/constants/theme";
 import { useDashboardSettings } from "@/contexts/dashboard-settings-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
@@ -45,22 +48,76 @@ function TrendIcon({ trend }: { trend: Trend }) {
 }
 
 const metricsById: Record<string, DashboardMetric> = Object.fromEntries(
-  DASHBOARD_METRICS.map((m) => [m.id, m])
+  DASHBOARD_METRICS.map((m) => [m.id, m]),
 );
+
+function formatActiveDayLabel(date: Date): string {
+  const today = new Date();
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (ymd(date) === ymd(today)) return "Today";
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (ymd(date) === ymd(yesterday)) return "Yesterday";
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 type MyDashboardProps = {
   onCustomizePress?: () => void;
+  /** Active/selected date so stats can reflect "for this day" vs average. */
+  selectedDate?: Date;
+  /** Real entries count for selected day (overrides "entries" metric when provided). */
+  entriesForSelectedDay?: number | null;
+  /** Real entries count this week (overrides "entries-this-week" value when provided). */
+  entriesThisWeek?: number | null;
+  /** Real total journals count (overrides "total-journals" when provided). */
+  totalJournals?: number | null;
+  /** Override value (and optional average) per metric id. */
+  metricOverrides?: Record<string, { value: number; average?: string }> | null;
 };
 
-export default function MyDashboard({ onCustomizePress }: MyDashboardProps) {
+export default function MyDashboard({
+  onCustomizePress,
+  selectedDate,
+  entriesForSelectedDay,
+  entriesThisWeek,
+  totalJournals,
+  metricOverrides,
+}: MyDashboardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const { getOrderedVisible, isLoading } = useDashboardSettings();
 
   const visibleMetrics = useMemo(() => {
     const ids = getOrderedVisible();
-    return ids.map((id) => metricsById[id]).filter(Boolean) as DashboardMetric[];
+    return ids
+      .map((id) => metricsById[id])
+      .filter(Boolean) as DashboardMetric[];
   }, [getOrderedVisible]);
+
+  const valueForMetric = useCallback(
+    (item: DashboardMetric): { value: string; average: string } => {
+      if (item.id === "entries-this-week" && entriesThisWeek != null) {
+        return { value: String(entriesThisWeek), average: "this week" };
+      }
+      if (item.id === "total-journals" && totalJournals != null) {
+        return { value: String(totalJournals), average: "journals" };
+      }
+      const over = metricOverrides?.[item.id];
+      if (over != null) {
+        return {
+          value: String(over.value),
+          average: over.average ?? "—",
+        };
+      }
+      return { value: "—", average: "—" };
+    },
+    [entriesThisWeek, totalJournals, metricOverrides],
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -113,6 +170,17 @@ export default function MyDashboard({ onCustomizePress }: MyDashboardProps) {
             <View style={styles.metricBody}>
               <Text style={[styles.metricLabel, { color: colors.foreground }]}>
                 {item.label}
+                {selectedDate && item.id === "entries-this-week" && (
+                  <Text
+                    style={[
+                      styles.metricLabelSub,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    {" "}
+                    · {formatActiveDayLabel(selectedDate)}
+                  </Text>
+                )}
               </Text>
             </View>
             <View>
@@ -120,7 +188,7 @@ export default function MyDashboard({ onCustomizePress }: MyDashboardProps) {
                 <Text
                   style={[styles.metricValue, { color: colors.foreground }]}
                 >
-                  {item.value}
+                  {valueForMetric(item).value}
                 </Text>
                 <TrendIcon trend={item.trend} />
               </View>
@@ -130,7 +198,7 @@ export default function MyDashboard({ onCustomizePress }: MyDashboardProps) {
                   { color: colors.mutedForeground },
                 ]}
               >
-                {item.average}
+                {valueForMetric(item).average}
               </Text>
             </View>
           </View>
@@ -198,6 +266,11 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
+  },
+  metricLabelSub: {
+    fontSize: 11,
+    fontWeight: "400",
+    textTransform: "none",
   },
   valueRow: {
     flexDirection: "row",
