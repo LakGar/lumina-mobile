@@ -25,6 +25,17 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Environment variables
+
+Copy `.env.example` to `.env` and set the values. Only `EXPO_PUBLIC_*` variables are available in the app. API keys and secrets are configured on your backend; the app only needs the Clerk key and your API base URL.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key (Dashboard → API Keys) for auth |
+| `EXPO_PUBLIC_API_URL` | Yes | Your backend API base URL |
+| `EXPO_PUBLIC_CHAT_API_URL` | No | Chat/AI base URL if different from main API |
+| `EXPO_PUBLIC_APP_ENV` | No | e.g. `development` / `staging` / `production` |
+
 ## Get a fresh project
 
 When you're ready, run:

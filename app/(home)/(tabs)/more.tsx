@@ -3,6 +3,11 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  checkBackendConnection,
+  getApiBaseUrl,
+  hasApiUrl,
+} from "@/utils/api";
 import { SignedIn } from "@clerk/clerk-expo";
 import Entypo from "@expo/vector-icons/Entypo";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -10,8 +15,17 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const HEADER_HEIGHT = 100;
@@ -61,6 +75,43 @@ export default function MoreScreen() {
   const colors = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [checking, setChecking] = useState(false);
+
+  const handleCheckBackend = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChecking(true);
+    try {
+      const result = await checkBackendConnection();
+      if (result.ok) {
+        Alert.alert(
+          "Backend connected",
+          `Successfully reached your API.\n\nURL: ${result.url}\nStatus: ${result.status}`,
+          [{ text: "OK" }],
+        );
+      } else {
+        const urlLine = result.url ? `\nURL: ${result.url}` : "";
+        const hints: string[] = [];
+        if (Platform.OS === "web") {
+          hints.push("• On Web, your backend must allow CORS: send Access-Control-Allow-Origin with your app origin (or *) in the response.");
+        }
+        hints.push("• Restart the dev server (npx expo start) after changing .env so EXPO_PUBLIC_API_URL is loaded.");
+        if (result.url?.includes("localhost") || result.url?.includes("127.0.0.1")) {
+          hints.push("• On a real device, use your computer's IP instead of localhost.");
+        }
+        if (result.url?.startsWith("http://")) {
+          hints.push("• Android blocks plain HTTP by default; use HTTPS.");
+        }
+        const hintBlock = hints.length ? `\n\nTips:\n${hints.join("\n")}` : "";
+        Alert.alert(
+          "Backend unreachable",
+          `${result.error}${urlLine}${hintBlock}`,
+          [{ text: "OK" }],
+        );
+      }
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const membershipGradient =
     colorScheme === "dark"
@@ -101,7 +152,7 @@ export default function MoreScreen() {
             />
             <View>
               <Image
-                source={require("@/assets/images/refer.jpg")}
+                source={require("@/assets/images/refer.png")}
                 contentFit="cover"
                 style={styles.membershipCardImage}
               />
@@ -287,6 +338,37 @@ export default function MoreScreen() {
               Account and settings
             </ThemedText>
             <View style={[styles.menuBlock]}>
+              <Pressable
+                onPress={handleCheckBackend}
+                disabled={checking}
+                style={({ pressed }) => [
+                  styles.menuRow,
+                  { backgroundColor: colors.card, borderRadius: radius.lg },
+                  (pressed || checking) && { opacity: 0.7 },
+                ]}
+              >
+                <Ionicons
+                  name="cloud-outline"
+                  size={18}
+                  color={colors.mutedForeground}
+                />
+                <Text
+                  style={[styles.menuRowLabel, { color: colors.foreground }]}
+                  numberOfLines={1}
+                >
+                  BACKEND CONNECTION
+                </Text>
+                {checking ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text
+                    style={[styles.backendUrlHint, { color: colors.mutedForeground }]}
+                    numberOfLines={1}
+                  >
+                    {hasApiUrl() ? getApiBaseUrl() : "Not set"}
+                  </Text>
+                )}
+              </Pressable>
               <MenuRow
                 icon="person-outline"
                 label="MY ACCOUNT"
@@ -462,6 +544,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  backendUrlHint: {
+    fontSize: 11,
+    maxWidth: 120,
   },
   logoutSection: {
     marginTop: 8,

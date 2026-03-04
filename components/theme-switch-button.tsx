@@ -1,9 +1,9 @@
+import { Colors } from "@/constants/theme";
+import { useTheme } from "@/contexts/theme-context";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as Haptics from "expo-haptics";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useTheme } from "@/contexts/theme-context";
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const ICON_SIZE = 24;
 
@@ -26,18 +26,17 @@ export function ThemeSwitchButton() {
   return (
     <Pressable
       onPress={handlePress}
-      style={({ pressed }) => [
-        styles.touchable,
-        pressed && styles.pressed,
-      ]}
+      style={({ pressed }) => [styles.touchable, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
+      accessibilityLabel={
+        isDark ? "Switch to light theme" : "Switch to dark theme"
+      }
     >
       <View style={[styles.iconWrap, { backgroundColor: colors.secondary }]}>
         <MaterialIcons
           name={isDark ? "light-mode" : "dark-mode"}
           size={ICON_SIZE}
-          color={colors.foreground}
+          color={isDark ? "black" : "white"}
         />
       </View>
     </Pressable>

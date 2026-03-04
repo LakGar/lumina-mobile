@@ -1,94 +1,109 @@
 /**
- * Design tokens — light/dark themes (trial palette).
- * Hex equivalents of oklch from :root / .dark for React Native.
+ * Lumina theme — aligned with Lumina landing (premium nostalgic / golden-hour).
+ * Typography: Playfair Display (headings), Inter (body).
  */
 
 import { Platform } from "react-native";
 
-// From :root/.dark primary
-const tintColorLight = "#b85c2a";
-const tintColorDark = "#d4925a";
+// ---------------------------------------------------------------------------
+// 1. Colors — Light (Lumina landing)
+// ---------------------------------------------------------------------------
 
-/** Light theme — :root (oklch → hex) */
 const lightColors = {
-  background: "#f3f1e8",
-  foreground: "#5c5348",
-  card: "#f3f1e8",
-  cardForeground: "#5c5348",
-  popover: "#ffffff",
-  popoverForeground: "#5c5348",
-  primary: "#b85c2a",
-  primaryForeground: "#ffffff",
-  secondary: "#c4b89a",
-  secondaryForeground: "#ffffff",
-  muted: "#d9c9b4",
-  mutedForeground: "#7a6b5a",
-  accent: "#d9c9b4",
-  accentForeground: "#5c5348",
-  destructive: "#2d2a26",
-  destructiveForeground: "#ffffff",
-  border: "#c4b89a",
-  input: "#c4b89a",
-  ring: "#b85c2a",
-  chart1: "#b85c2a",
-  chart2: "#7a6b5a",
-  chart3: "#c97d4a",
-  chart4: "#c4b89a",
-  chart5: "#a67c52",
-  sidebar: "#e5dcc8",
-  sidebarForeground: "#5c5348",
-  sidebarPrimary: "#b85c2a",
-  sidebarPrimaryForeground: "#ffffff",
-  sidebarAccent: "#c97d4a",
-  sidebarAccentForeground: "#ffffff",
-  sidebarBorder: "#a67c52",
-  sidebarRing: "#b85c2a",
-  text: "#5c5348",
-  tint: tintColorLight,
-  icon: "#7a6b5a",
-  tabIconDefault: "#7a6b5a",
-  tabIconSelected: tintColorLight,
+  background: "#FDFCF9",
+  foreground: "#1E1E1E",
+  card: "#FFFFFF",
+  cardForeground: "#1E1E1E",
+  popover: "#FFFFFF",
+  popoverForeground: "#1E1E1E",
+  primary: "#F97316",
+  primaryForeground: "#FDFCF9",
+  secondary: "#1E1E1E",
+  secondaryForeground: "#FDFCF9",
+  muted: "#F5F3EF",
+  mutedForeground: "#6B6B6B",
+  accent: "#FDBA74",
+  accentForeground: "#1E1E1E",
+  destructive: "#dc2626",
+  destructiveForeground: "#FFFFFF",
+  border: "#e5ddd4",
+  input: "#e5ddd4",
+  ring: "#F97316",
+  chart1: "#F97316",
+  chart2: "#FDBA74",
+  chart3: "#6B6B6B",
+  chart4: "#7a9e7e",
+  chart5: "#2c2419",
+  sidebar: "#F5F3EF",
+  sidebarForeground: "#1E1E1E",
+  sidebarPrimary: "#F97316",
+  sidebarPrimaryForeground: "#FDFCF9",
+  sidebarAccent: "#FDBA74",
+  sidebarAccentForeground: "#1E1E1E",
+  sidebarBorder: "#e5ddd4",
+  sidebarRing: "#F97316",
+  text: "#1E1E1E",
+  textSecondary: "#6B6B6B",
+  tint: "#F97316",
+  icon: "#6B6B6B",
+  tabIconDefault: "#6B6B6B",
+  tabIconSelected: "#F97316",
+  surfaceAlt: "#F5F3EF",
+  surfaceWarm: "#f7f4ef",
+  // Legacy / optional (web parity)
+  darkBrown: "#2c2419",
+  mutedBrown: "#6b5d4f",
+  greenAccent: "#7a9e7e",
 };
 
-/** Dark theme — .dark (oklch → hex) */
+// ---------------------------------------------------------------------------
+// 2. Colors — Dark (same hue, dark backgrounds)
+// ---------------------------------------------------------------------------
+
 const darkColors = {
-  background: "#3d3832",
-  foreground: "#f3f1e8",
-  card: "#4a4540",
-  cardForeground: "#f3f1e8",
-  popover: "#4a4540",
-  popoverForeground: "#f3f1e8",
-  primary: "#d4925a",
-  primaryForeground: "#3d3832",
-  secondary: "#7a6b5a",
-  secondaryForeground: "#f3f1e8",
-  muted: "#5c5348",
-  mutedForeground: "#c9b59a",
-  accent: "#c4b89a",
-  accentForeground: "#3d3832",
-  destructive: "#e85c3a",
-  destructiveForeground: "#3d3832",
-  border: "#5c5348",
-  input: "#5c5348",
-  ring: "#d4925a",
-  chart1: "#d4925a",
-  chart2: "#c4b89a",
-  chart3: "#b85c2a",
-  chart4: "#7a6b5a",
-  chart5: "#a67c52",
-  sidebar: "#2d2a26",
-  sidebarForeground: "#f3f1e8",
-  sidebarPrimary: "#d4925a",
-  sidebarPrimaryForeground: "#2d2a26",
-  sidebarAccent: "#c4b89a",
-  sidebarAccentForeground: "#2d2a26",
-  sidebarBorder: "#5c5348",
-  sidebarRing: "#d4925a",
-  text: "#f3f1e8",
-  tint: tintColorDark,
-  icon: "#c9b59a",
-  tabIconDefault: "#c9b59a",
-  tabIconSelected: tintColorDark,
+  background: "#1E1E1E",
+  foreground: "#FDFCF9",
+  card: "#2d2a26",
+  cardForeground: "#FDFCF9",
+  popover: "#2d2a26",
+  popoverForeground: "#FDFCF9",
+  primary: "#F97316",
+  primaryForeground: "#FDFCF9",
+  secondary: "#F5F3EF",
+  secondaryForeground: "#1E1E1E",
+  muted: "#3d3832",
+  mutedForeground: "#a8a29e",
+  accent: "#FDBA74",
+  accentForeground: "#1E1E1E",
+  destructive: "#dc2626",
+  destructiveForeground: "#FFFFFF",
+  border: "#44403c",
+  input: "#44403c",
+  ring: "#F97316",
+  chart1: "#F97316",
+  chart2: "#FDBA74",
+  chart3: "#a8a29e",
+  chart4: "#7a9e7e",
+  chart5: "#e5ddd4",
+  sidebar: "#1E1E1E",
+  sidebarForeground: "#FDFCF9",
+  sidebarPrimary: "#F97316",
+  sidebarPrimaryForeground: "#FDFCF9",
+  sidebarAccent: "#FDBA74",
+  sidebarAccentForeground: "#1E1E1E",
+  sidebarBorder: "#44403c",
+  sidebarRing: "#F97316",
+  text: "#FDFCF9",
+  textSecondary: "#a8a29e",
+  tint: "#F97316",
+  icon: "#a8a29e",
+  tabIconDefault: "#a8a29e",
+  tabIconSelected: "#F97316",
+  surfaceAlt: "#2d2a26",
+  surfaceWarm: "#2d2a26",
+  darkBrown: "#e5ddd4",
+  mutedBrown: "#a8a29e",
+  greenAccent: "#7a9e7e",
 };
 
 export const Colors = {
@@ -96,28 +111,113 @@ export const Colors = {
   dark: darkColors,
 };
 
-/** Border radius tokens (--radius: 0.5rem → 8) */
+// ---------------------------------------------------------------------------
+// 3. Border radius (spec: sm 4 → full pill)
+// ---------------------------------------------------------------------------
+
 export const radius = {
-  sm: 4, // calc(var(--radius) - 4px)
-  md: 6, // calc(var(--radius) - 2px)
-  lg: 8, // var(--radius)
-  xl: 12, // calc(var(--radius) + 4px)
+  sm: 4,
+  md: 6,
+  lg: 8,
+  xl: 12,
+  "2xl": 16,
+  full: 9999,
 };
 
-/** Spacing token (--spacing: 0.25rem) */
-export const spacing = 4;
+// ---------------------------------------------------------------------------
+// 4. Spacing (8px base)
+// ---------------------------------------------------------------------------
 
-/** Shadow tokens — warm tint per trial palette (--shadow-color) */
-const shadowColor = "#7a6f66";
-const shadowOpacity = 0.11;
+export const spacing = {
+  1: 4,
+  2: 8,
+  3: 12,
+  4: 16,
+  5: 20,
+  6: 24,
+  8: 32,
+  10: 40,
+  12: 48,
+  16: 64,
+} as const;
+
+/** Legacy single unit (4px) for compatibility */
+export const spacingUnit = 4;
+
+// ---------------------------------------------------------------------------
+// 5. Type scale (px) — xs 12 → 6xl 60
+// ---------------------------------------------------------------------------
+
+export const typeScale = {
+  xs: 12,
+  sm: 14,
+  base: 16,
+  lg: 18,
+  xl: 20,
+  "2xl": 24,
+  "3xl": 30,
+  "4xl": 36,
+  "5xl": 48,
+  "6xl": 60,
+} as const;
+
+/** Letter-spacing: headlines 0.02em, body 0, uppercase 0.05–0.1em */
+export const letterSpacing = {
+  headline: 0.02,
+  body: 0,
+  uppercase: 0.08,
+} as const;
+
+/** Line height: headings tight ~1.2–1.25, body relaxed ~1.5–1.6 */
+export const lineHeight = {
+  tight: 1.25,
+  relaxed: 1.55,
+} as const;
+
+// ---------------------------------------------------------------------------
+// 6. Shadows — light, warm-tinted
+// ---------------------------------------------------------------------------
+
+const shadowColor = "#1E1E1E";
 
 export const Shadows = {
-  "2xs": Platform.select({
+  card: Platform.select({
     ios: {
       shadowColor,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.05,
-      shadowRadius: 3,
+      shadowRadius: 2,
+    },
+    android: { elevation: 2 },
+    default: {},
+  }),
+  button: Platform.select({
+    ios: {
+      shadowColor,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 2,
+    },
+    android: { elevation: 1 },
+    default: {},
+  }),
+  modal: Platform.select({
+    ios: {
+      shadowColor,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
+    },
+    android: { elevation: 6 },
+    default: {},
+  }),
+  // Legacy aliases
+  "2xs": Platform.select({
+    ios: {
+      shadowColor,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 2,
     },
     android: { elevation: 1 },
     default: {},
@@ -126,8 +226,8 @@ export const Shadows = {
     ios: {
       shadowColor,
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 3,
+      shadowOpacity: 0.04,
+      shadowRadius: 2,
     },
     android: { elevation: 1 },
     default: {},
@@ -136,7 +236,7 @@ export const Shadows = {
     ios: {
       shadowColor,
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity,
+      shadowOpacity: 0.05,
       shadowRadius: 3,
     },
     android: { elevation: 2 },
@@ -146,7 +246,7 @@ export const Shadows = {
     ios: {
       shadowColor,
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity,
+      shadowOpacity: 0.06,
       shadowRadius: 4,
     },
     android: { elevation: 3 },
@@ -156,7 +256,7 @@ export const Shadows = {
     ios: {
       shadowColor,
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity,
+      shadowOpacity: 0.06,
       shadowRadius: 6,
     },
     android: { elevation: 4 },
@@ -165,9 +265,9 @@ export const Shadows = {
   xl: Platform.select({
     ios: {
       shadowColor,
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity,
-      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
     },
     android: { elevation: 6 },
     default: {},
@@ -175,33 +275,75 @@ export const Shadows = {
   "2xl": Platform.select({
     ios: {
       shadowColor,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
     },
     android: { elevation: 8 },
     default: {},
   }),
 } as const;
 
+// ---------------------------------------------------------------------------
+// 7. Fonts — Playfair Display (headings), Inter (body)
+// Loaded via useFonts in app _layout; use these keys in TextStyle fontFamily.
+// ---------------------------------------------------------------------------
+
+export const FontFamily = {
+  heading: "PlayfairDisplay_500Medium",
+  headingSemiBold: "PlayfairDisplay_600SemiBold",
+  body: "Inter_400Regular",
+  bodyMedium: "Inter_500Medium",
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
-    sans: "system-ui",
-    serif: "ui-serif",
-    rounded: "ui-rounded",
-    mono: "ui-monospace",
+    heading: FontFamily.heading,
+    headingMedium: FontFamily.heading,
+    headingSemiBold: FontFamily.headingSemiBold,
+    body: FontFamily.body,
+    bodyMedium: FontFamily.bodyMedium,
+    mono: "Menlo",
+  },
+  android: {
+    heading: FontFamily.heading,
+    headingMedium: FontFamily.heading,
+    headingSemiBold: FontFamily.headingSemiBold,
+    body: FontFamily.body,
+    bodyMedium: FontFamily.bodyMedium,
+    mono: "monospace",
   },
   default: {
-    sans: "normal",
-    serif: "serif",
-    rounded: "normal",
+    heading: FontFamily.heading,
+    headingMedium: FontFamily.heading,
+    headingSemiBold: FontFamily.headingSemiBold,
+    body: FontFamily.body,
+    bodyMedium: FontFamily.bodyMedium,
     mono: "monospace",
   },
   web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded:
-      "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+    heading: "Playfair Display, Georgia, serif",
+    headingMedium: "Playfair Display, Georgia, serif",
+    headingSemiBold: "Playfair Display, Georgia, serif",
+    body: "Inter, system-ui, -apple-system, sans-serif",
+    bodyMedium: "Inter, system-ui, -apple-system, sans-serif",
+    mono: "ui-monospace, monospace",
   },
 });
+
+// ---------------------------------------------------------------------------
+// 8. Text on images — shadow for readability
+// ---------------------------------------------------------------------------
+
+export const textShadowOnImage = {
+  light: {
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  strong: {
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+} as const;
