@@ -1,9 +1,11 @@
 import TabHeader from "@/components/tab-header";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
+import { useSubscription } from "@/contexts/subscription-context";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import type { Journal } from "@/lib/api";
 import { formatUpdatedShort } from "@/utils/date";
 import { SignedIn } from "@clerk/clerk-expo";
@@ -21,8 +23,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { showJournalLimitUpgrade } from "@/utils/plan-limit";
 
 const HEADER_HEIGHT = 100;
+const FREE_JOURNAL_LIMIT = 3;
 const SEARCH_BAR_HEIGHT = 52;
 const TOP_TOTAL = HEADER_HEIGHT + SEARCH_BAR_HEIGHT;
 const PADDING_H = 20;
@@ -30,10 +34,11 @@ const LIST_PADDING_BOTTOM = 120;
 
 export default function JournalsScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const api = useApi();
+  const { isPro } = useSubscription() ?? { isPro: false };
   const [searchQuery, setSearchQuery] = useState("");
   const [journals, setJournals] = useState<Journal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +78,10 @@ export default function JournalsScreen() {
 
   const onAdd = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!isPro && journals.length >= FREE_JOURNAL_LIMIT) {
+      showJournalLimitUpgrade(router);
+      return;
+    }
     router.push("/(home)/create-journal");
   };
 

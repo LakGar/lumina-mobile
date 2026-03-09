@@ -1,8 +1,10 @@
 import { SignOutButton } from "@/components/sign-out-button";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius, Shadows } from "@/constants/theme";
+import type { ColorSet } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import {
   checkBackendConnection,
   getApiBaseUrl,
@@ -42,7 +44,7 @@ function MenuRow({
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
-  colors: (typeof Colors)["light"];
+  colors: ColorSet;
   last?: boolean;
 }) {
   return (
@@ -72,7 +74,7 @@ function MenuRow({
 
 export default function MoreScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [checking, setChecking] = useState(false);

@@ -1,7 +1,8 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import { getSafeExternalUrl } from "@/lib/safe-url";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -36,7 +37,7 @@ function getClerkAccountUrl(): string | null {
 export default function MyAccountScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
 

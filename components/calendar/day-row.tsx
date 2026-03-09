@@ -1,6 +1,7 @@
 import type { CalendarDayRow, CalendarItem } from "@/constants/calendar-mock";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { memo, useState } from "react";
@@ -23,7 +24,7 @@ function DayRowInner({
   onCardLongPress,
 }: DayRowProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
 
   const items = day.items;

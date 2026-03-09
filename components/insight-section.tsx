@@ -1,6 +1,7 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { hexToRgba, radius, Shadows } from "@/constants/theme";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import type { MoodLog } from "@/lib/api";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
@@ -26,8 +27,10 @@ export type InsightSectionProps = {
   journaledDaysThisWeek?: boolean[] | null;
   /** @deprecated Mood card now uses standalone general moods from GET /api/moods */
   recentMoodSummary?: { lastMood: string; count: number } | null;
-  /** Lumina level score (0 when no backend). */
+  /** Lumina level score (0 when no backend). When undefined or false, level card is hidden (Free). */
   luminaScore?: number;
+  /** If false/undefined, level card is hidden; show only for Pro. */
+  isPro?: boolean;
   /** Optional: navigate to mood trends screen (e.g. "View trends" link). */
   onNavigateToMood?: () => void;
   onCreateEntry: () => void;
@@ -66,13 +69,14 @@ export function InsightSection({
   journaledDaysThisWeek,
   recentMoodSummary,
   luminaScore = 0,
+  isPro = false,
   onNavigateToMood,
   onCreateEntry,
   onNavigateToEntry,
   onNavigateToCreateJournal,
 }: InsightSectionProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const api = useApi();
   const entriesThisWeek = entriesThisWeekProp ?? 0;
   const weekBar = journaledDaysThisWeek ?? [...DEFAULT_WEEK_BAR];
@@ -145,75 +149,43 @@ export function InsightSection({
       });
   }, [api, moodTitleInput, moodNoteInput, closeLogMoodModal]);
 
-  // Gradient backgrounds – soft wash from card to theme tint
+  // Gradient backgrounds – theme-aware (primary/accent from selected palette)
   type GradientTuple = readonly [string, string, string];
+  const isDark = colorScheme === "dark";
   const cardGradients: Record<
     "level" | "lastJournal" | "weekly" | "entries" | "mood",
     GradientTuple
   > = {
-    level:
-      colorScheme === "dark"
-        ? [colors.card, "rgba(249, 115, 22, 0.14)", "rgba(254, 243, 199, 0.04)"]
-        : [colors.card, "rgba(254, 243, 199, 0.5)", "rgba(194, 65, 12, 0.06)"],
-    lastJournal:
-      colorScheme === "dark"
-        ? [colors.card, "rgba(168, 85, 247, 0.12)", "rgba(233, 213, 255, 0.04)"]
-        : [
-            colors.card,
-            "rgba(233, 213, 255, 0.35)",
-            "rgba(168, 85, 247, 0.06)",
-          ],
-    weekly:
-      colorScheme === "dark"
-        ? [colors.card, "rgba(180, 83, 9, 0.12)", "rgba(254, 243, 199, 0.04)"]
-        : [colors.card, "rgba(254, 243, 199, 0.4)", "rgba(180, 83, 9, 0.07)"],
-    entries:
-      colorScheme === "dark"
-        ? [
-            colors.card,
-            "rgba(212, 212, 216, 0.08)",
-            "rgba(250, 250, 250, 0.03)",
-          ]
-        : [
-            colors.card,
-            "rgba(245, 245, 244, 0.8)",
-            "rgba(115, 115, 115, 0.05)",
-          ],
-    mood:
-      colorScheme === "dark"
-        ? [colors.card, "rgba(34, 197, 94, 0.12)", "rgba(187, 247, 208, 0.04)"]
-        : [colors.card, "rgba(187, 247, 208, 0.5)", "rgba(34, 197, 94, 0.08)"],
+    level: isDark
+      ? [colors.card, hexToRgba(colors.primary, 0.14), hexToRgba(colors.accent, 0.04)]
+      : [colors.card, hexToRgba(colors.accent, 0.5), hexToRgba(colors.primary, 0.06)],
+    lastJournal: isDark
+      ? [colors.card, hexToRgba(colors.accent, 0.12), hexToRgba(colors.primary, 0.04)]
+      : [colors.card, hexToRgba(colors.accent, 0.35), hexToRgba(colors.primary, 0.06)],
+    weekly: isDark
+      ? [colors.card, hexToRgba(colors.primary, 0.12), hexToRgba(colors.accent, 0.04)]
+      : [colors.card, hexToRgba(colors.accent, 0.4), hexToRgba(colors.primary, 0.07)],
+    entries: isDark
+      ? [colors.card, hexToRgba(colors.mutedForeground, 0.08), hexToRgba(colors.muted, 0.03)]
+      : [colors.card, hexToRgba(colors.muted, 0.8), hexToRgba(colors.mutedForeground, 0.05)],
+    mood: isDark
+      ? [colors.card, hexToRgba(colors.chart4 ?? colors.primary, 0.12), hexToRgba(colors.accent, 0.04)]
+      : [colors.card, hexToRgba(colors.chart4 ?? colors.accent, 0.5), hexToRgba(colors.chart4 ?? colors.primary, 0.08)],
   };
 
-  // Title strip backgrounds – clearer, still on theme
   const titleBg = {
-    level:
-      colorScheme === "dark"
-        ? "rgba(249, 115, 22, 0.22)"
-        : "rgba(194, 65, 12, 0.14)",
-    lastJournal:
-      colorScheme === "dark"
-        ? "rgba(168, 85, 247, 0.2)"
-        : "rgba(168, 85, 247, 0.12)",
-    weekly:
-      colorScheme === "dark"
-        ? "rgba(180, 83, 9, 0.22)"
-        : "rgba(180, 83, 9, 0.14)",
-    entries:
-      colorScheme === "dark"
-        ? "rgba(161, 161, 170, 0.18)"
-        : "rgba(115, 115, 115, 0.12)",
-    mood:
-      colorScheme === "dark"
-        ? "rgba(34, 197, 94, 0.2)"
-        : "rgba(34, 197, 94, 0.14)",
+    level: isDark ? hexToRgba(colors.primary, 0.22) : hexToRgba(colors.primary, 0.14),
+    lastJournal: isDark ? hexToRgba(colors.accent, 0.2) : hexToRgba(colors.accent, 0.12),
+    weekly: isDark ? hexToRgba(colors.primary, 0.22) : hexToRgba(colors.primary, 0.14),
+    entries: isDark ? hexToRgba(colors.mutedForeground, 0.18) : hexToRgba(colors.mutedForeground, 0.12),
+    mood: isDark ? hexToRgba(colors.chart4 ?? colors.primary, 0.2) : hexToRgba(colors.chart4 ?? colors.primary, 0.14),
   };
   const titleColor = {
-    level: colorScheme === "dark" ? "#fed7aa" : "#9a3412",
-    lastJournal: colorScheme === "dark" ? "#e9d5ff" : "#6b21a8",
-    weekly: colorScheme === "dark" ? "#fef3c7" : "#92400e",
-    entries: colorScheme === "dark" ? "#d4d4d8" : "#52525b",
-    mood: colorScheme === "dark" ? "#86efac" : "#15803d",
+    level: colors.primaryForeground,
+    lastJournal: colors.primaryForeground,
+    weekly: colors.primaryForeground,
+    entries: colors.foreground,
+    mood: colors.primaryForeground,
   };
 
   const handlePress = useCallback((action: () => void) => {
@@ -275,62 +247,64 @@ export function InsightSection({
       </View>
 
       <View style={styles.grid}>
-        {/* Lumina level card */}
-        <View
-          style={[
-            styles.tile,
-            { borderColor: colors.border },
-            { width: CARD_WIDTH_PCT },
-            Shadows.sm,
-          ]}
-        >
-          <LinearGradient
-            colors={cardGradients.level}
-            style={StyleSheet.absoluteFillObject}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
-          <View style={styles.tileContent}>
-            <View
-              style={[styles.titlePill, { backgroundColor: titleBg.level }]}
-            >
-              <Text style={[styles.tileLabel, { color: titleColor.level }]}>
-                Lumina level
-              </Text>
-            </View>
-            <View>
-              <Text style={[styles.tileValue, { color: colors.foreground }]}>
-                {luminaScore > 0 ? (tier?.label ?? "Bronze") : "0"}
-              </Text>
+        {/* Lumina level card — Pro only */}
+        {isPro && (
+          <View
+            style={[
+              styles.tile,
+              { borderColor: colors.border },
+              { width: CARD_WIDTH_PCT },
+              Shadows.sm,
+            ]}
+          >
+            <LinearGradient
+              colors={cardGradients.level}
+              style={StyleSheet.absoluteFillObject}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View style={styles.tileContent}>
               <View
-                style={[
-                  styles.progressTrack,
-                  { backgroundColor: colors.muted },
-                ]}
+                style={[styles.titlePill, { backgroundColor: titleBg.level }]}
               >
+                <Text style={[styles.tileLabel, { color: titleColor.level }]}>
+                  Lumina level
+                </Text>
+              </View>
+              <View>
+                <Text style={[styles.tileValue, { color: colors.foreground }]}>
+                  {luminaScore > 0 ? (tier?.label ?? "Bronze") : "0"}
+                </Text>
                 <View
                   style={[
-                    styles.progressFill,
-                    {
-                      width: `${progressPct}%`,
-                      backgroundColor: colors.primary,
-                    },
+                    styles.progressTrack,
+                    { backgroundColor: colors.muted },
                   ]}
-                />
+                >
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${progressPct}%`,
+                        backgroundColor: colors.primary,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.tileValueSecondary,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {luminaScore > 0
+                    ? "Keep journaling to level up"
+                    : "Start journaling to earn points"}
+                </Text>
               </View>
-              <Text
-                style={[
-                  styles.tileValueSecondary,
-                  { color: colors.foreground },
-                ]}
-              >
-                {luminaScore > 0
-                  ? "Keep journaling to level up"
-                  : "Start journaling to earn points"}
-              </Text>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Last journal card */}
         <View

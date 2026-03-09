@@ -1,6 +1,5 @@
-import { Colors } from "@/constants/theme";
 import { useTheme } from "@/contexts/theme-context";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as Haptics from "expo-haptics";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -9,8 +8,7 @@ const ICON_SIZE = 24;
 
 export function ThemeSwitchButton() {
   const theme = useTheme();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme];
+  const colors = useThemeColors();
 
   if (!theme) {
     return null;

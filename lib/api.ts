@@ -8,10 +8,12 @@ import { Platform } from "react-native";
 
 export type GetTokenFn = () => Promise<string | null>;
 
-/** Base URL for API. Use EXPO_PUBLIC_API_URL or platform default. */
+/** Base URL for API (origin only, no /api). Use EXPO_PUBLIC_API_URL or platform default. */
 export function getApiBaseUrl(): string {
   if (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, "");
+    let base = process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, "");
+    if (base.endsWith("/api")) base = base.slice(0, -4);
+    return base;
   }
   if (Platform.OS === "android") return "http://10.0.2.2:3000";
   return "http://localhost:3000";
@@ -36,14 +38,29 @@ export type JournalEntry = {
   updatedAt?: string;
   title?: string;
   body: string;
+  prompt?: string | null;
   tags?: string[];
   mood?: string;
   images?: string[];
 };
 
+/** API color scheme enum (backend: DEFAULT, WARM, COOL + 7 more = 10). */
+export type ApiColorScheme =
+  | "DEFAULT"
+  | "WARM"
+  | "COOL"
+  | "OCEAN"
+  | "FOREST"
+  | "ROSE"
+  | "SLATE"
+  | "SUNSET"
+  | "LAVENDER"
+  | "MINT";
+
 /** User preferences from API */
 export type UserPreferences = {
   theme?: "light" | "dark" | "system";
+  colorScheme?: ApiColorScheme | string | null;
   goal?: string | null;
   topics?: string | string[] | null;
   reason?: string | null;
@@ -177,6 +194,10 @@ function toEntry(raw: Record<string, unknown>): JournalEntry {
         )
         .filter(Boolean)
     : [];
+  const prompt =
+    typeof raw.prompt === "string" && raw.prompt.trim()
+      ? raw.prompt.trim()
+      : undefined;
   return {
     id,
     journalId,
@@ -184,6 +205,7 @@ function toEntry(raw: Record<string, unknown>): JournalEntry {
     updatedAt,
     title: title || undefined,
     body,
+    prompt: prompt ?? null,
     mood: mood || undefined,
     tags: tags.length ? tags : undefined,
   };
@@ -294,6 +316,7 @@ export async function createEntry(
   payload: {
     content: string;
     source?: "TEXT" | "VOICE" | "MIXED";
+    prompt?: string | null;
     mood?: string;
     tags?: string[];
   },
@@ -824,6 +847,7 @@ export async function fetchPreferences(
   const d = res.data as Record<string, unknown>;
   return {
     theme: d?.theme as UserPreferences["theme"],
+    colorScheme: (d?.colorScheme as UserPreferences["colorScheme"]) ?? null,
     goal: d?.goal as string | null,
     topics: d?.topics as UserPreferences["topics"],
     reason: d?.reason as string | null,
@@ -832,7 +856,7 @@ export async function fetchPreferences(
 
 export async function updatePreferences(
   getToken: GetTokenFn,
-  payload: UserPreferences,
+  payload: Partial<UserPreferences>,
 ): Promise<UserPreferences> {
   const res = await request<{ data: unknown }>(
     getToken,
@@ -842,6 +866,7 @@ export async function updatePreferences(
   const d = res.data as Record<string, unknown>;
   return {
     theme: d?.theme as UserPreferences["theme"],
+    colorScheme: (d?.colorScheme as UserPreferences["colorScheme"]) ?? null,
     goal: d?.goal as string | null,
     topics: d?.topics as UserPreferences["topics"],
     reason: d?.reason as string | null,
@@ -1023,3 +1048,15 @@ export async function syncBilling(
 }
 
 export { ApiError };
+
+/** True when the error is a 403 with body.code === "PLAN_LIMIT" from the backend. */
+export function isPlanLimitError(e: unknown): e is ApiError {
+  if (!(e instanceof ApiError) || e.status !== 403) return false;
+  const b = e.body;
+  return (
+    b != null &&
+    typeof b === "object" &&
+    "code" in b &&
+    (b as { code?: string }).code === "PLAN_LIMIT"
+  );
+}

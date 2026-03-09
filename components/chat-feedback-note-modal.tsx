@@ -1,5 +1,6 @@
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
@@ -29,7 +30,7 @@ export function ChatFeedbackNoteModal({
   onSubmit,
 }: ChatFeedbackNoteModalProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [note, setNote] = useState("");
 

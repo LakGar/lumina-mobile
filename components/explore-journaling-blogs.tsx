@@ -1,10 +1,11 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Dimensions,
   Linking,
@@ -68,7 +69,7 @@ const JOURNALING_BLOGS: Array<{
 
 export function ExploreJournalingBlogs() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const onPress = useCallback((item: (typeof JOURNALING_BLOGS)[0]) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

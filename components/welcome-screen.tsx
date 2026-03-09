@@ -1,5 +1,6 @@
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import React, { useMemo } from "react";
@@ -10,7 +11,7 @@ import { ThemedText } from "./themed-text";
 
 const WelcomeScreen = () => {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
 
   const themedStyles = useMemo(

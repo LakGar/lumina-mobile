@@ -112,6 +112,165 @@ export const Colors = {
 };
 
 // ---------------------------------------------------------------------------
+// 2b. Color schemes (palettes) — user can pick one; swatch = circle color
+// ---------------------------------------------------------------------------
+
+export type ColorSet = typeof lightColors;
+
+function paletteFromPrimary(
+  lightPrimary: string,
+  lightAccent: string,
+  darkPrimary: string,
+  darkAccent: string,
+): { light: ColorSet; dark: ColorSet } {
+  return {
+    light: {
+      ...lightColors,
+      primary: lightPrimary,
+      accent: lightAccent,
+      ring: lightPrimary,
+      chart1: lightPrimary,
+      chart2: lightAccent,
+      sidebarPrimary: lightPrimary,
+      sidebarAccent: lightAccent,
+      sidebarRing: lightPrimary,
+      tint: lightPrimary,
+      tabIconSelected: lightPrimary,
+    },
+    dark: {
+      ...darkColors,
+      primary: darkPrimary,
+      accent: darkAccent,
+      ring: darkPrimary,
+      chart1: darkPrimary,
+      chart2: darkAccent,
+      sidebarPrimary: darkPrimary,
+      sidebarAccent: darkAccent,
+      sidebarRing: darkPrimary,
+      tint: darkPrimary,
+      tabIconSelected: darkPrimary,
+    },
+  };
+}
+
+export type ColorSchemeId =
+  | "lumina"
+  | "ocean"
+  | "forest"
+  | "rose"
+  | "slate"
+  | "sunset"
+  | "lavender"
+  | "mint"
+  | "berry";
+
+export type ColorPaletteEntry = {
+  light: ColorSet;
+  dark: ColorSet;
+  swatch: string;
+  name: string;
+};
+
+export const COLOR_SCHEME_IDS: ColorSchemeId[] = [
+  "lumina",
+  "ocean",
+  "forest",
+  "rose",
+  "slate",
+  "sunset",
+  "lavender",
+  "mint",
+  "berry",
+];
+
+export const ColorPalettes: Record<ColorSchemeId, ColorPaletteEntry> = {
+  lumina: {
+    light: lightColors,
+    dark: darkColors,
+    swatch: "#F97316",
+    name: "Lumina",
+  },
+  ocean: {
+    ...paletteFromPrimary("#0ea5e9", "#7dd3fc", "#38bdf8", "#7dd3fc"),
+    swatch: "#0ea5e9",
+    name: "Ocean",
+  },
+  forest: {
+    ...paletteFromPrimary("#059669", "#6ee7b7", "#34d399", "#6ee7b7"),
+    swatch: "#059669",
+    name: "Forest",
+  },
+  rose: {
+    ...paletteFromPrimary("#e11d48", "#fda4af", "#f43f5e", "#fda4af"),
+    swatch: "#e11d48",
+    name: "Rose",
+  },
+  slate: {
+    ...paletteFromPrimary("#475569", "#94a3b8", "#64748b", "#94a3b8"),
+    swatch: "#475569",
+    name: "Slate",
+  },
+  sunset: {
+    ...paletteFromPrimary("#ea580c", "#fdba74", "#f97316", "#fdba74"),
+    swatch: "#d97706",
+    name: "Sunset",
+  },
+  lavender: {
+    ...paletteFromPrimary("#7c3aed", "#c4b5fd", "#8b5cf6", "#c4b5fd"),
+    swatch: "#7c3aed",
+    name: "Lavender",
+  },
+  mint: {
+    ...paletteFromPrimary("#0d9488", "#5eead4", "#2dd4bf", "#5eead4"),
+    swatch: "#0d9488",
+    name: "Mint",
+  },
+  berry: {
+    ...paletteFromPrimary("#be185d", "#f9a8d4", "#ec4899", "#f9a8d4"),
+    swatch: "#be185d",
+    name: "Berry",
+  },
+};
+
+/** Hex to rgba string for gradient/overlay use with theme colors. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ---------------------------------------------------------------------------
+// 2c. API color scheme (backend enum: DEFAULT, WARM, COOL + 7 = 10)
+// ---------------------------------------------------------------------------
+
+export const API_COLOR_SCHEME_OPTIONS: {
+  value: string;
+  label: string;
+  paletteId: ColorSchemeId;
+}[] = [
+  { value: "DEFAULT", label: "Default", paletteId: "lumina" },
+  { value: "WARM", label: "Warm", paletteId: "sunset" },
+  { value: "COOL", label: "Cool", paletteId: "ocean" },
+  { value: "OCEAN", label: "Ocean", paletteId: "ocean" },
+  { value: "FOREST", label: "Forest", paletteId: "forest" },
+  { value: "ROSE", label: "Rose", paletteId: "rose" },
+  { value: "SLATE", label: "Slate", paletteId: "slate" },
+  { value: "SUNSET", label: "Sunset", paletteId: "sunset" },
+  { value: "LAVENDER", label: "Lavender", paletteId: "lavender" },
+  { value: "MINT", label: "Mint", paletteId: "mint" },
+];
+
+export function apiColorSchemeToPaletteId(value: string | null | undefined): ColorSchemeId {
+  if (!value || typeof value !== "string") return "lumina";
+  const opt = API_COLOR_SCHEME_OPTIONS.find(
+    (o) => o.value.toUpperCase() === value.toUpperCase(),
+  );
+  return opt?.paletteId ?? "lumina";
+}
+
+// ---------------------------------------------------------------------------
 // 3. Border radius (spec: sm 4 → full pill)
 // ---------------------------------------------------------------------------
 

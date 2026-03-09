@@ -1,5 +1,6 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React from "react";
@@ -58,7 +59,7 @@ export function DiscoverCardModal({
   onOpenJournals,
 }: DiscoverCardModalProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const handleStart = (prompt: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

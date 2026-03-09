@@ -1,9 +1,10 @@
 import { JournalSelectModal } from "@/components/journal-select-modal";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -46,7 +47,7 @@ export default function MoodScreen() {
   const router = useRouter();
   const api = useApi();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(true);

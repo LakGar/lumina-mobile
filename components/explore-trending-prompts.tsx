@@ -1,5 +1,6 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -57,7 +58,7 @@ export function ExploreTrendingPrompts({
   onStartJournaling,
 }: ExploreTrendingPromptsProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const onPress = (item: (typeof TRENDING_PROMPTS)[0]) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

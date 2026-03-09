@@ -76,6 +76,11 @@ export function useCalendarData(
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef<Promise<void> | null>(null);
 
+  const fetchMyEntriesRef = useRef(fetchMyEntries);
+  const fetchRemindersRef = useRef(fetchReminders);
+  fetchMyEntriesRef.current = fetchMyEntries;
+  fetchRemindersRef.current = fetchReminders;
+
   const load = useCallback(async () => {
     if (inFlightRef.current) {
       await inFlightRef.current;
@@ -96,10 +101,9 @@ export function useCalendarData(
 
     const doLoad = async () => {
       try {
-        // Don't pass from/to so we use cached recent-entries and avoid 429
         const [entries, reminders] = await Promise.all([
-          fetchMyEntries(ENTRIES_LIMIT),
-          fetchReminders({ from, to }),
+          fetchMyEntriesRef.current(ENTRIES_LIMIT),
+          fetchRemindersRef.current({ from, to }),
         ]);
 
         const entryItems: CalendarItem[] = entries
@@ -133,7 +137,7 @@ export function useCalendarData(
 
     const promise = doLoad();
     inFlightRef.current = promise;
-  }, [mode, fetchMyEntries, fetchReminders]);
+  }, [mode]);
 
   useEffect(() => {
     load();

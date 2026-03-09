@@ -5,9 +5,10 @@ import {
   DEFAULT_ORDER,
   type DashboardMetric,
 } from "@/constants/dashboard-metrics";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useDashboardSettings } from "@/contexts/dashboard-settings-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
@@ -95,7 +96,7 @@ function MetricRow({
   useScaleDecorator?: boolean;
 }) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const rowContent = (
     <Pressable
@@ -138,7 +139,7 @@ const noop = () => {};
 
 export default function CustomizeDashboardScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const { order, visibleIds, setOrder, setVisible } = useDashboardSettings();
 
   const orderedData = useMemo(() => {

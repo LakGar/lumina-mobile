@@ -1,8 +1,11 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
+import { useSubscription } from "@/contexts/subscription-context";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
+import { isPlanLimitError } from "@/lib/api";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -18,15 +21,18 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { showJournalLimitUpgrade, showPlanLimitUpgrade } from "@/utils/plan-limit";
 
 const PADDING_H = 20;
+const FREE_JOURNAL_LIMIT = 3;
 
 export default function CreateJournalScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const api = useApi();
+  const { isPro } = useSubscription() ?? { isPro: false };
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -38,11 +44,26 @@ export default function CreateJournalScreen() {
     const t = title.trim();
     if (!t || submitting) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!isPro) {
+      try {
+        const list = await api.fetchJournals();
+        if (list.length >= FREE_JOURNAL_LIMIT) {
+          showJournalLimitUpgrade(router);
+          return;
+        }
+      } catch {
+        // continue; backend will 403 if over limit
+      }
+    }
     setSubmitting(true);
     try {
       const journal = await api.createJournal(t);
       router.replace(`/(home)/journal/${journal.id}`);
     } catch (e) {
+      if (isPlanLimitError(e)) {
+        showPlanLimitUpgrade(router);
+        return;
+      }
       Alert.alert(
         "Error",
         e instanceof Error ? e.message : "Could not create journal",

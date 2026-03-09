@@ -1,8 +1,9 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import { ApiError } from "@/lib/api";
 import { useClerk } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -30,7 +31,7 @@ const STORAGE_KEY_ANALYTICS = "@privacy/analytics";
 export default function PrivacySettingsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const api = useApi();
   const { signOut } = useClerk();

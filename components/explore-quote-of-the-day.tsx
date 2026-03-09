@@ -1,5 +1,6 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { hexToRgba, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
@@ -27,7 +28,7 @@ const QUOTE_IMAGE_URI =
 
 export function ExploreQuoteOfTheDay() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const quote = getQuoteOfDay();
 
   const onPress = useCallback(() => {
@@ -56,6 +57,16 @@ export function ExploreQuoteOfTheDay() {
         <LinearGradient
           colors={["rgba(0,0,0,0.35)", "rgba(0,0,0,0.7)"]}
           style={StyleSheet.absoluteFillObject}
+        />
+        <LinearGradient
+          colors={[
+            hexToRgba(colors.primary, 0.06),
+            "transparent",
+            hexToRgba(colors.accent, 0.08),
+          ]}
+          style={StyleSheet.absoluteFillObject}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         />
         <View style={styles.content}>
           <View style={styles.badgeRow}>

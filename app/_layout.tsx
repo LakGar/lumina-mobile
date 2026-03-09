@@ -1,5 +1,6 @@
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSettingsProvider } from "@/contexts/dashboard-settings-context";
+import { SubscriptionProvider } from "@/contexts/subscription-context";
 import { ThemeProvider as AppThemeProvider } from "@/contexts/theme-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
@@ -47,7 +48,8 @@ function RootContent() {
         publishableKey={clerkPublishableKey ?? ""}
         tokenCache={tokenCache}
       >
-        <DashboardSettingsProvider>
+        <SubscriptionProvider>
+          <DashboardSettingsProvider>
           <Stack>
             <Stack.Screen name="(home)" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -58,6 +60,7 @@ function RootContent() {
           </Stack>
           <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         </DashboardSettingsProvider>
+        </SubscriptionProvider>
       </ClerkProvider>
     </ThemeProvider>
   );

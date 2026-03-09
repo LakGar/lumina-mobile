@@ -2,9 +2,10 @@ import {
   DASHBOARD_METRICS,
   type DashboardMetric,
 } from "@/constants/dashboard-metrics";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useDashboardSettings } from "@/contexts/dashboard-settings-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useMemo } from "react";
 import {
@@ -35,7 +36,7 @@ function MetricRow({
   drag: () => void;
 }) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   return (
     <Pressable
@@ -92,7 +93,7 @@ const USE_NATIVE_SCROLL = true; // set to false to use DraggableFlatList (no nes
 
 export function CustomizeDashboardModal({ visible, onClose }: Props) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const {
     order,
     visibleIds,

@@ -5,8 +5,9 @@ import {
   type JournalEntry,
 } from "@/constants/mock-journals";
 import { MOCK_JOURNALS } from "@/constants/mock-journals";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
@@ -38,7 +39,7 @@ export function ChatAddContextSheet({
   onAddContext,
 }: ChatAddContextSheetProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>("pick_type");
   const [addType, setAddType] = useState<"journal" | "entry">("journal");

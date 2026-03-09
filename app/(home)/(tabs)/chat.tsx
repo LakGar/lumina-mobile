@@ -12,8 +12,9 @@ import {
   type ChatListItem,
 } from "@/components/chat-list-side-sheet";
 import { getEntryListTitle } from "@/constants/mock-journals";
-import { Colors } from "@/constants/theme";
+import type { ColorSet } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useRef, useState } from "react";
@@ -74,9 +75,11 @@ const EXAMPLE_PROMPTS = [
   "Summarize my week",
 ];
 
+const TAB_BAR_CLEARANCE = 80;
+
 function TypingDots() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const d1 = useSharedValue(0);
   const d2 = useSharedValue(0);
   const d3 = useSharedValue(0);
@@ -161,7 +164,7 @@ function MessageBubble({
   onDislike,
 }: {
   message: Message;
-  colors: (typeof Colors)["light"];
+  colors: ColorSet;
   onRegenerate?: (messageId: string) => void;
   onLike?: (messageId: string) => void;
   onDislike?: (messageId: string) => void;
@@ -272,7 +275,7 @@ function createNewChat(): ChatState {
 
 export default function ChatScreen() {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);
 
@@ -297,7 +300,7 @@ export default function ChatScreen() {
   const [showPromptsAfterFirstMessage, setShowPromptsAfterFirstMessage] =
     useState(true);
 
-  const inputRowPaddingBottom = useSharedValue(insets.bottom + 12);
+  const inputRowPaddingBottom = useSharedValue(12);
   const promptsOpacity = useSharedValue(1);
 
   React.useEffect(() => {
@@ -309,15 +312,13 @@ export default function ChatScreen() {
       inputRowPaddingBottom.value = withTiming(10, { duration: 280 });
     });
     const hideSub = Keyboard.addListener(hideEvent, () => {
-      inputRowPaddingBottom.value = withTiming(insets.bottom + 12, {
-        duration: 250,
-      });
+      inputRowPaddingBottom.value = withTiming(12, { duration: 250 });
     });
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, [insets.bottom, inputRowPaddingBottom]);
+  }, [inputRowPaddingBottom]);
 
   const currentChat = chats.find((c) => c.id === currentChatId);
   const messages = currentChat?.messages ?? [];
@@ -587,8 +588,15 @@ export default function ChatScreen() {
 
   const showPrompts = messages.length === 0 || showPromptsAfterFirstMessage;
 
+  const containerBottomInset = insets.bottom + TAB_BAR_CLEARANCE;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingBottom: containerBottomInset },
+      ]}
+    >
       <View style={[styles.headerWrap, { backgroundColor: colors.background }]}>
         <ChatHeader
           title={chatTitle}
@@ -841,7 +849,7 @@ function RenameModal({
   onSave,
   onClose,
 }: {
-  colors: (typeof Colors)["light"];
+  colors: ColorSet;
   value: string;
   onChangeText: (t: string) => void;
   onSave: () => void;
@@ -932,7 +940,6 @@ const renameStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingBottom: 42,
   },
   headerWrap: {},
   keyboard: {
@@ -1076,6 +1083,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     fontSize: 16,
+    marginBottom: 56,
   },
   sendBtn: {
     width: 44,

@@ -1,5 +1,6 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { hexToRgba, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -27,7 +28,7 @@ type PromptOfTheDayProps = {
 
 export function PromptOfTheDay({ onStartJournaling }: PromptOfTheDayProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const [prompt, setPrompt] = useState(() => getRandomPrompt());
 
   const onGenerate = useCallback(() => {
@@ -42,8 +43,8 @@ export function PromptOfTheDay({ onStartJournaling }: PromptOfTheDayProps) {
 
   const gradientColors: readonly [string, string, string] =
     colorScheme === "dark"
-      ? [colors.card, "rgba(254, 243, 199, 0.08)", "rgba(249, 115, 22, 0.06)"]
-      : [colors.card, "rgba(254, 243, 199, 0.6)", "rgba(194, 65, 12, 0.05)"];
+      ? [colors.card, hexToRgba(colors.accent, 0.08), hexToRgba(colors.primary, 0.06)]
+      : [colors.card, hexToRgba(colors.accent, 0.6), hexToRgba(colors.primary, 0.05)];
 
   return (
     <View style={styles.container}>

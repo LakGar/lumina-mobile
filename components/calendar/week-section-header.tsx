@@ -1,7 +1,8 @@
 import type { CalendarWeekSection } from "@/constants/calendar-mock";
 import { clearRemindersForWeek } from "@/constants/calendar-mock";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { memo } from "react";
@@ -14,7 +15,7 @@ type WeekSectionHeaderProps = {
 
 function WeekSectionHeaderInner({ section, onReset }: WeekSectionHeaderProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const handleReset = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

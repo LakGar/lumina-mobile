@@ -1,9 +1,11 @@
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
+import { useSubscription } from "@/contexts/subscription-context";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import type { JournalEntry } from "@/lib/api";
-import { ApiError } from "@/lib/api";
+import { ApiError, isPlanLimitError } from "@/lib/api";
 import { isValidEntryId } from "@/lib/validate-ids";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,6 +37,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { showPlanLimitUpgrade } from "@/utils/plan-limit";
 
 const PADDING_H = 16;
 const DRAFT_PERSIST_DEBOUNCE_MS = 800;
@@ -67,18 +70,22 @@ function bodyPlainFromHtml(html: string | undefined): string {
 }
 
 export default function EntryDetailScreen() {
-  const { entryId: rawEntryId, journalId: rawJournalId } =
+  const { entryId: rawEntryId, journalId: rawJournalId, prompt: promptParam } =
     useLocalSearchParams<{
       entryId: string;
       journalId?: string;
+      prompt?: string;
     }>();
   const entryId = isValidEntryId(rawEntryId) ? rawEntryId!.trim() : null;
   const journalId = rawJournalId?.trim() || null;
+  const promptFromParams =
+    typeof promptParam === "string" ? promptParam.trim() : "";
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const api = useApi();
+  const { isPro } = useSubscription() ?? { isPro: false };
 
   const [entry, setEntry] = useState<JournalEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -196,7 +203,7 @@ export default function EntryDetailScreen() {
     savingRef.current = true;
     setSaveStatus("saving");
     const content = bodyRef.current.trim() || " ";
-    const moodVal = moodRef.current.trim() || undefined;
+    const moodVal = isPro ? (moodRef.current.trim() || undefined) : undefined;
     const tagsVal = tagsRef.current.length > 0 ? tagsRef.current : undefined;
     try {
       await api.updateEntry(entryId, {
@@ -207,12 +214,15 @@ export default function EntryDetailScreen() {
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
       await AsyncStorage.removeItem(DRAFT_KEY_PREFIX + entryId);
-    } catch {
+    } catch (e) {
+      if (isPlanLimitError(e)) {
+        showPlanLimitUpgrade(router);
+      }
       setSaveStatus("error");
     } finally {
       savingRef.current = false;
     }
-  }, [entryId, api]);
+  }, [entryId, api, isPro, router]);
 
   useEffect(() => {
     if (draftTimeoutRef.current) clearTimeout(draftTimeoutRef.current);
@@ -292,6 +302,10 @@ export default function EntryDetailScreen() {
 
   const handleGoDeeper = useCallback(async () => {
     if (!entryId || goDeeperLoading) return;
+    if (!isPro) {
+      showPlanLimitUpgrade(router);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setGoDeeperLoading(true);
     setGoDeeperQuestions([]);
@@ -301,6 +315,10 @@ export default function EntryDetailScreen() {
       setGoDeeperQuestions(questions);
       setGoDeeperVisible(true);
     } catch (e) {
+      if (isPlanLimitError(e)) {
+        showPlanLimitUpgrade(router);
+        return;
+      }
       const msg =
         e instanceof ApiError && e.status === 502
           ? "AI is temporarily unavailable"
@@ -312,7 +330,7 @@ export default function EntryDetailScreen() {
     } finally {
       setGoDeeperLoading(false);
     }
-  }, [entryId, api, body, goDeeperLoading, performSave]);
+  }, [entryId, api, body, goDeeperLoading, isPro, performSave, router]);
 
   const pickQuestion = useCallback(
     (question: string) => {
@@ -480,6 +498,30 @@ export default function EntryDetailScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {(entry?.prompt?.trim() || promptFromParams) ? (
+            <Animated.View
+              entering={FadeIn.duration(220)}
+              style={[
+                styles.promptBadge,
+                {
+                  backgroundColor: colors.popover ?? colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={14}
+                color={colors.mutedForeground}
+              />
+              <Text
+                style={[styles.promptBadgeText, { color: colors.mutedForeground }]}
+                numberOfLines={2}
+              >
+                {entry?.prompt?.trim() || promptFromParams}
+              </Text>
+            </Animated.View>
+          ) : null}
           <Animated.View
             entering={FadeInDown.duration(320).springify().damping(18)}
             style={styles.notesBlock}
@@ -775,6 +817,7 @@ export default function EntryDetailScreen() {
                     (goDeeperLoading || aiLoading || pressed) && {
                       opacity: 0.8,
                     },
+                    !isPro && { opacity: 0.7 },
                   ]}
                 >
                   {goDeeperLoading ? (
@@ -789,7 +832,7 @@ export default function EntryDetailScreen() {
                   ) : (
                     <>
                       <Ionicons
-                        name="chatbubble-ellipses-outline"
+                        name={isPro ? "chatbubble-ellipses-outline" : "lock-closed-outline"}
                         size={16}
                         color={colors.foreground}
                       />
@@ -799,7 +842,7 @@ export default function EntryDetailScreen() {
                           { color: colors.foreground },
                         ]}
                       >
-                        Go deeper
+                        {isPro ? "Go deeper" : "Go deeper (Lumina)"}
                       </Text>
                     </>
                   )}
@@ -844,12 +887,21 @@ export default function EntryDetailScreen() {
                   ]}
                 >
                   Mood
+                  {!isPro && (
+                    <Text style={{ fontSize: 12, marginLeft: 6 }}>
+                      (Lumina)
+                    </Text>
+                  )}
                 </Text>
                 <View style={styles.detailsRowOptions}>
                   {MOOD_OPTIONS.map((m) => (
                     <Pressable
                       key={m}
                       onPress={() => {
+                        if (!isPro) {
+                          showPlanLimitUpgrade(router);
+                          return;
+                        }
                         setMood(mood === m ? "" : m);
                       }}
                       style={({ pressed }) => [
@@ -1079,6 +1131,22 @@ const styles = StyleSheet.create({
   keyboardAvoid: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: {},
+  promptBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    marginBottom: 12,
+    maxWidth: "100%",
+  },
+  promptBadgeText: {
+    fontSize: 13,
+    flex: 1,
+  },
   notesBlock: {
     marginBottom: 8,
   },

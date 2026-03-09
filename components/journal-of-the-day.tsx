@@ -1,5 +1,6 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { hexToRgba, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,7 +23,7 @@ type JournalOfTheDayProps = {
 export function JournalOfTheDay({ onStartJournaling }: JournalOfTheDayProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const onStart = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -35,8 +36,8 @@ export function JournalOfTheDay({ onStartJournaling }: JournalOfTheDayProps) {
 
   const gradientColors: readonly [string, string, string] =
     colorScheme === "dark"
-      ? [colors.card, "rgba(233, 213, 255, 0.06)", "rgba(168, 85, 247, 0.05)"]
-      : [colors.card, "rgba(233, 213, 255, 0.4)", "rgba(168, 85, 247, 0.04)"];
+      ? [colors.card, hexToRgba(colors.accent, 0.06), hexToRgba(colors.primary, 0.05)]
+      : [colors.card, hexToRgba(colors.accent, 0.4), hexToRgba(colors.primary, 0.04)];
 
   return (
     <View style={styles.container}>

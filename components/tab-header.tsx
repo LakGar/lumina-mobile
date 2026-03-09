@@ -1,8 +1,8 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { WeekAtGlance } from "@/components/week-at-glance";
-import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import { addDays, formatShortDate, isToday } from "@/utils/date";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -59,7 +59,7 @@ export default function TabHeader({
   selectedDate: controlledSelectedDate,
 }: TabHeaderProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const paddingTop = insets.top + HEADER_TOP_PADDING;
   const router = useRouter();

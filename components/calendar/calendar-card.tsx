@@ -1,6 +1,7 @@
 import type { CalendarItem, JournalTemplate } from "@/constants/calendar-mock";
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { memo } from "react";
@@ -23,7 +24,7 @@ type CalendarCardProps = {
 
 function CalendarCardInner({ item, onPress, onLongPress }: CalendarCardProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const accent =
     item.kind === "entry" ? TEMPLATE_ACCENT[item.template] : colors.primary;

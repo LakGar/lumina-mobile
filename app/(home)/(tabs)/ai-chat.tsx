@@ -1,14 +1,18 @@
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
+import { useSubscription } from "@/contexts/subscription-context";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import type { Journal } from "@/lib/api";
-import { ApiError } from "@/lib/api";
+import { ApiError, isPlanLimitError } from "@/lib/api";
+import { showPlanLimitUpgrade } from "@/utils/plan-limit";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,14 +25,18 @@ import {
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const TAB_BAR_CLEARANCE = 80;
+
 type MessageRole = "user" | "assistant";
 type ChatMessage = { id: string; role: MessageRole; content: string };
 
 export default function AIChatScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const api = useApi();
+  const { isPro } = useSubscription() ?? { isPro: false };
   const apiRef = useRef(api);
   apiRef.current = api;
 
@@ -40,7 +48,25 @@ export default function AIChatScreen() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  React.useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () =>
+      setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +107,10 @@ export default function AIChatScreen() {
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || !selectedJournal || sending) return;
+    if (!isPro) {
+      showPlanLimitUpgrade(router);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInput("");
     const userMsg: ChatMessage = {
@@ -107,6 +137,10 @@ export default function AIChatScreen() {
       setMessages((prev) => [...prev, assistantMsg]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e) {
+      if (isPlanLimitError(e)) {
+        showPlanLimitUpgrade(router);
+        return;
+      }
       const msg =
         e instanceof ApiError && e.status === 502
           ? "AI is temporarily unavailable"
@@ -121,7 +155,7 @@ export default function AIChatScreen() {
     } finally {
       setSending(false);
     }
-  }, [input, selectedJournal, sessionId, sending]);
+  }, [input, isPro, router, selectedJournal, sessionId, sending]);
 
   if (journalsLoading && journals.length === 0) {
     return (
@@ -161,7 +195,7 @@ export default function AIChatScreen() {
           style={styles.journalList}
           contentContainerStyle={[
             styles.journalListContent,
-            { paddingBottom: insets.bottom + 24 },
+            { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE + 24 },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -377,7 +411,12 @@ export default function AIChatScreen() {
       <View
         style={[
           styles.inputRow,
-          { paddingBottom: insets.bottom + 12, borderTopColor: colors.border },
+          {
+            paddingBottom: keyboardVisible
+              ? 12
+              : insets.bottom + TAB_BAR_CLEARANCE - 20,
+            borderTopColor: colors.border,
+          },
         ]}
       >
         <TextInput

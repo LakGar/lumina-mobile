@@ -1,7 +1,8 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import { useSignIn, useSignInWithApple, useSSO } from "@clerk/clerk-expo";
 import type { EmailCodeFactor } from "@clerk/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,7 +30,7 @@ export default function Page() {
   const { startAppleAuthenticationFlow } = useSignInWithApple();
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");

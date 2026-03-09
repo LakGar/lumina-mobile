@@ -1,5 +1,5 @@
-import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
@@ -45,7 +45,7 @@ export default function ChatHeader({
   onOption,
 }: ChatHeaderProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const paddingTop = insets.top + HEADER_TOP_PADDING;
   const [optionsVisible, setOptionsVisible] = useState(false);

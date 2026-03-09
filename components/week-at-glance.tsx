@@ -1,5 +1,5 @@
-import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import {
   addDays,
   formatYYYYMMDD,
@@ -53,7 +53,7 @@ export function WeekAtGlance({
   markersByDate = {},
 }: WeekAtGlanceProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const [pageWidth, setPageWidth] = useState<number | null>(null);
   const listRef = useRef<FlatList>(null);
 

@@ -2,9 +2,10 @@ import {
   DASHBOARD_METRICS,
   type DashboardMetric,
 } from "@/constants/dashboard-metrics";
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { radius, Shadows } from "@/constants/theme";
 import { useDashboardSettings } from "@/contexts/dashboard-settings-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -18,7 +19,7 @@ type Trend = "up" | "down" | "neutral";
 
 function TrendIcon({ trend }: { trend: Trend }) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   if (trend === "up") {
     return (
@@ -89,7 +90,7 @@ export default function MyDashboard({
   metricOverrides,
 }: MyDashboardProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const { getOrderedVisible, isLoading } = useDashboardSettings();
 
   const visibleMetrics = useMemo(() => {

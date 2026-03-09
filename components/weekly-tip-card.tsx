@@ -1,5 +1,6 @@
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import type { WeeklyTip } from "@/lib/api";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
@@ -74,6 +75,8 @@ export type WeeklyTipCardProps = {
   generating: boolean;
   onGetTip: () => void;
   onTipShown?: (tip: WeeklyTip) => void;
+  /** If false, shows "Upgrade to Lumina" CTA instead of tip content. */
+  isPro?: boolean;
 };
 
 export function WeeklyTipCard({
@@ -82,9 +85,10 @@ export function WeeklyTipCard({
   generating,
   onGetTip,
   onTipShown,
+  isPro = true,
 }: WeeklyTipCardProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [detailVisible, setDetailVisible] = React.useState(false);
   const [detailTip, setDetailTip] = React.useState<WeeklyTip | null>(null);
@@ -124,7 +128,7 @@ export function WeeklyTipCard({
   }
 
   const showCta = !tip && !generating;
-  const showCard = tip && !generating;
+  const showCard = tip && !generating && isPro;
 
   return (
     <>
@@ -147,16 +151,22 @@ export function WeeklyTipCard({
                 { backgroundColor: colors.primary + "20" },
               ]}
             >
-              <Ionicons name="bulb-outline" size={28} color={colors.primary} />
+              <Ionicons
+                name={isPro ? "bulb-outline" : "lock-closed-outline"}
+                size={28}
+                color={colors.primary}
+              />
             </View>
             <View style={styles.ctaBody}>
               <Text style={[styles.ctaTitle, { color: colors.foreground }]}>
-                Get your weekly tip
+                {isPro ? "Get your weekly tip" : "Weekly tips"}
               </Text>
               <Text
                 style={[styles.ctaSubtitle, { color: colors.mutedForeground }]}
               >
-                Personalized insight based on your journaling
+                {isPro
+                  ? "Personalized insight based on your journaling"
+                  : "Upgrade to Lumina for personalized weekly tips"}
               </Text>
             </View>
             <Ionicons

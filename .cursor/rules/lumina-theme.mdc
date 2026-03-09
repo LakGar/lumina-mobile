@@ -1,0 +1,12 @@
+# Lumina app theme
+
+Use the **Lumina theme spec** implemented in `constants/theme.ts` so the app matches the Lumina landing (premium nostalgic / golden-hour).
+
+- **Colors:** Import from `@/constants/theme` — `Colors.light` / `Colors.dark`, `primary: #F97316`, `background: #FDFCF9`, `foreground: #1E1E1E`, `mutedForeground: #6B6B6B`, `border: #e5ddd4`.
+- **Fonts:** `Fonts.heading` / `Fonts.body` (Playfair Display for headings, Inter for body). Use `ThemedText` or set `fontFamily: Fonts.body` / `Fonts.heading` in styles.
+- **Type scale:** `typeScale` (xs 12 → 6xl 60). **Radius:** `radius.lg`, `radius.xl`, `radius["2xl"]`, `radius.full` for pills.
+- **Spacing:** `spacing` (8px base: spacing[2]=8, spacing[4]=16, etc.).
+- **Shadows:** `Shadows.card`, `Shadows.modal` — light, warm-tinted; no heavy glow.
+- **Text on images:** `textShadowOnImage.light` or `.strong` for readability.
+
+Keep the feel **calm, minimal, reflective** — no heavy gradients or glow.

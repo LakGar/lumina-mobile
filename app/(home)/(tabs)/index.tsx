@@ -7,6 +7,7 @@ import RefferalBanner from "@/components/refferal-banner";
 import TabHeader from "@/components/tab-header";
 import { ThemedView } from "@/components/themed-view";
 import { WeeklyTipCard } from "@/components/weekly-tip-card";
+import { useSubscription } from "@/contexts/subscription-context";
 import { useApi } from "@/hooks/use-api";
 import type { WeeklyTip } from "@/lib/api";
 import { addDays, formatYYYYMMDD, startOfWeek } from "@/utils/date";
@@ -36,6 +37,7 @@ const HEADER_OVERLAY_HEIGHT = 200;
 export default function HomeIndex() {
   const router = useRouter();
   const api = useApi();
+  const { isPro } = useSubscription() ?? { isPro: false };
   const [hasAiSuggestions] = useState(true);
   const [showWeekStrip, setShowWeekStrip] = useState(true);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -72,14 +74,17 @@ export default function HomeIndex() {
     try {
       apiRef.current.invalidate.journals();
       apiRef.current.invalidate.myEntries();
-      const [journalsRes, entriesRes] = await Promise.all([
+      apiRef.current.invalidate.userStats();
+      const [journalsRes, entriesRes, userStatsRes] = await Promise.all([
         apiRef.current.fetchJournals().then((j) => (Array.isArray(j) ? j : [])),
         apiRef.current
           .fetchMyEntries(100)
           .then((e) => (Array.isArray(e) ? e : [])),
+        apiRef.current.fetchUserStats().catch(() => null),
       ]);
       const journals = journalsRes;
       const entries = entriesRes;
+      const userStats = userStatsRes;
       setTotalJournals(journals.length);
       const weekStart = startOfWeek(new Date());
       const weekEnd = addDays(weekStart, 7);
@@ -185,6 +190,26 @@ export default function HomeIndex() {
         value: consistencyPct,
         average: "last 30 days",
       };
+
+      if (userStats) {
+        if (userStats.entryQualityScore != null) {
+          overrides["entry-quality-score"] = {
+            value: Math.round(userStats.entryQualityScore),
+            average: "quality",
+          };
+        }
+        if (userStats.moodScore != null) {
+          overrides["mood-score"] = {
+            value: Math.round(userStats.moodScore * 10) / 10,
+            average: "avg",
+          };
+        }
+        overrides["prompts-completed"] = {
+          value: userStats.promptsCompleted,
+          average: "total",
+        };
+      }
+
       setDashboardOverrides(overrides);
 
       const withMood = entries.filter(
@@ -232,9 +257,15 @@ export default function HomeIndex() {
     }, [loadDashboardStats]),
   );
 
-  // Fetch latest weekly tip (single request on focus/date change)
+  // Fetch latest weekly tip only for Pro (single request on focus/date change)
   useEffect(() => {
+    if (!isPro) {
+      setLatestWeeklyTip(null);
+      setWeeklyTipsLoading(false);
+      return;
+    }
     let cancelled = false;
+    setWeeklyTipsLoading(true);
     apiRef.current
       .fetchWeeklyTips(1)
       .then((list) => {
@@ -249,9 +280,13 @@ export default function HomeIndex() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDate]);
+  }, [isPro, selectedDate]);
 
   const handleGetWeeklyTip = useCallback(async () => {
+    if (!isPro) {
+      router.push("/(home)/subscription");
+      return;
+    }
     if (weeklyTipGenerating) return;
     setWeeklyTipGenerating(true);
     try {
@@ -266,7 +301,7 @@ export default function HomeIndex() {
     } finally {
       setWeeklyTipGenerating(false);
     }
-  }, [weeklyTipGenerating]);
+  }, [isPro, router, weeklyTipGenerating]);
 
   const handleWeeklyTipShown = useCallback((tip: WeeklyTip) => {
     apiRef.current.markWeeklyTipRead(tip.id).catch(() => {});
@@ -293,17 +328,23 @@ export default function HomeIndex() {
     async (journalId: string) => {
       const prompt = pendingPromptRef.current?.trim();
       pendingPromptRef.current = null;
-      const content = prompt && prompt.length > 0 ? prompt : ".";
+      const hasPrompt = prompt && prompt.length > 0;
+      const content = hasPrompt ? "." : ".";
       if (creatingEntryRef.current) return;
       creatingEntryRef.current = true;
       try {
         const newEntry = await api.createEntry(journalId, {
           content,
-          source: prompt ? "TEXT" : undefined,
+          source: hasPrompt ? "TEXT" : undefined,
+          ...(hasPrompt ? { prompt } : {}),
         });
         router.push({
           pathname: "/(home)/entry/[entryId]",
-          params: { entryId: newEntry.id, journalId },
+          params: {
+            entryId: newEntry.id,
+            journalId,
+            ...(hasPrompt ? { prompt } : {}),
+          },
         });
       } catch (e) {
         Alert.alert(
@@ -364,6 +405,7 @@ export default function HomeIndex() {
             generating={weeklyTipGenerating}
             onGetTip={handleGetWeeklyTip}
             onTipShown={handleWeeklyTipShown}
+            isPro={isPro}
           />
           <InsightSection
             selectedDate={selectedDate}
@@ -372,7 +414,8 @@ export default function HomeIndex() {
             lastJournalEntry={lastJournalEntry}
             journaledDaysThisWeek={journaledDaysThisWeek}
             recentMoodSummary={recentMoodSummary}
-            luminaScore={0}
+            luminaScore={isPro ? 0 : undefined}
+            isPro={isPro}
             onNavigateToMood={() => router.push("/(home)/mood")}
             onCreateEntry={handleOpenCreateEntry}
             onNavigateToEntry={(entryId, journalId) =>

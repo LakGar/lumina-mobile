@@ -1,5 +1,6 @@
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import * as Haptics from "expo-haptics";
 import React, { useCallback } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -21,7 +22,7 @@ export function ExploreTopicPills({
   onStartJournaling,
 }: ExploreTopicPillsProps) {
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
 
   const onPress = useCallback(
     (topic: string) => {

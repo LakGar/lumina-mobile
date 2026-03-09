@@ -1,11 +1,12 @@
-import { Colors, radius, Shadows } from "@/constants/theme";
+import { hexToRgba, radius, Shadows } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { GlassView } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ThemedText } from "./themed-text";
 
@@ -26,41 +27,11 @@ const DISCOVER_ITEMS: Array<{
     | "chatbubble-ellipses-outline"
     | "bulb-outline"
     | "navigate-outline";
-  gradientLight: [string, string];
-  gradientDark: [string, string];
 }> = [
-  {
-    id: "topics",
-    label: "Topics",
-    subtitle: "Gratitude, goals, mood",
-    icon: "albums-outline",
-    gradientLight: ["rgba(254, 243, 199, 0.5)", "rgba(194, 65, 12, 0.06)"],
-    gradientDark: ["rgba(249, 115, 22, 0.1)", "rgba(254, 243, 199, 0.03)"],
-  },
-  {
-    id: "prompts",
-    label: "Popular prompts",
-    subtitle: "Trending this week",
-    icon: "chatbubble-ellipses-outline",
-    gradientLight: ["rgba(233, 213, 255, 0.45)", "rgba(168, 85, 247, 0.05)"],
-    gradientDark: ["rgba(168, 85, 247, 0.1)", "rgba(233, 213, 255, 0.04)"],
-  },
-  {
-    id: "tips",
-    label: "Writing tip",
-    subtitle: "Short reflections work",
-    icon: "bulb-outline",
-    gradientLight: ["rgba(254, 243, 199, 0.5)", "rgba(180, 83, 9, 0.05)"],
-    gradientDark: ["rgba(254, 243, 199, 0.06)", "rgba(180, 83, 9, 0.08)"],
-  },
-  {
-    id: "guided",
-    label: "Guided",
-    subtitle: "Step-by-step flows",
-    icon: "navigate-outline",
-    gradientLight: ["rgba(245, 245, 244, 0.9)", "rgba(115, 115, 115, 0.04)"],
-    gradientDark: ["rgba(212, 212, 216, 0.06)", "rgba(250, 250, 250, 0.02)"],
-  },
+  { id: "topics", label: "Topics", subtitle: "Gratitude, goals, mood", icon: "albums-outline" },
+  { id: "prompts", label: "Popular prompts", subtitle: "Trending this week", icon: "chatbubble-ellipses-outline" },
+  { id: "tips", label: "Writing tip", subtitle: "Short reflections work", icon: "bulb-outline" },
+  { id: "guided", label: "Guided", subtitle: "Step-by-step flows", icon: "navigate-outline" },
 ];
 
 export function ExploreDiscover({
@@ -69,7 +40,21 @@ export function ExploreDiscover({
 }: ExploreDiscoverProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
+  const isDark = colorScheme === "dark";
+
+  const tileGradients = useMemo(() => {
+    const primary = colors.primary;
+    const accent = colors.accent;
+    const muted = colors.muted;
+    const mutedFg = colors.mutedForeground;
+    return {
+      topics: [colors.card, hexToRgba(accent, isDark ? 0.1 : 0.5), hexToRgba(primary, isDark ? 0.03 : 0.06)] as const,
+      prompts: [colors.card, hexToRgba(accent, isDark ? 0.1 : 0.45), hexToRgba(primary, isDark ? 0.04 : 0.05)] as const,
+      tips: [colors.card, hexToRgba(accent, isDark ? 0.06 : 0.5), hexToRgba(primary, isDark ? 0.08 : 0.05)] as const,
+      guided: [colors.card, hexToRgba(muted, isDark ? 0.06 : 0.9), hexToRgba(mutedFg, isDark ? 0.02 : 0.04)] as const,
+    };
+  }, [colors, isDark]);
 
   const onPress = useCallback(
     (id: string, label: string, subtitle: string) => {
@@ -122,12 +107,7 @@ export function ExploreDiscover({
             ]}
           >
             <LinearGradient
-              colors={[
-                colors.card,
-                ...(colorScheme === "dark"
-                  ? item.gradientDark
-                  : item.gradientLight),
-              ]}
+              colors={tileGradients[item.id as keyof typeof tileGradients]}
               style={StyleSheet.absoluteFillObject}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}

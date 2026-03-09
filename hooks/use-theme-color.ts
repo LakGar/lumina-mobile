@@ -1,28 +1,22 @@
 /**
  * Resolves a theme color from the active app theme (ThemeProvider).
- * Uses useColorScheme from hooks, which reads from theme context (not system).
+ * Uses the selected color palette (Lumina, Ocean, etc.) and light/dark mode.
  */
 
-import { Colors } from "@/constants/theme";
+import type { ColorSet } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-
-const VALID_THEMES = ["light", "dark"] as const;
+import { useThemeColors } from "@/hooks/use-theme-colors";
 
 export function useThemeColor(
   props: { light?: string; dark?: string },
-  colorName: keyof typeof Colors.light & keyof typeof Colors.dark,
+  colorName: keyof ColorSet,
 ) {
   const theme = useColorScheme();
-  const safeTheme =
-    theme &&
-    VALID_THEMES.includes(theme as (typeof VALID_THEMES)[number]) &&
-    Colors[theme as "light" | "dark"]
-      ? (theme as "light" | "dark")
-      : "light";
-  const colorFromProps = props[safeTheme];
+  const colors = useThemeColors();
+  const colorFromProps = theme === "dark" ? props.dark : props.light;
 
   if (colorFromProps) {
     return colorFromProps;
   }
-  return Colors[safeTheme][colorName];
+  return colors[colorName];
 }

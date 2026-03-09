@@ -2,9 +2,10 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 
 import { getEntryListTitle, getEntryPreview } from "@/constants/mock-journals";
-import { Colors, radius } from "@/constants/theme";
+import { radius } from "@/constants/theme";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import type { EntrySortOption, Journal, JournalEntry } from "@/lib/api";
 import { formatEntryListTime } from "@/utils/date";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -35,7 +36,7 @@ export default function JournalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const api = useApi();
 

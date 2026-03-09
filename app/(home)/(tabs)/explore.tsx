@@ -10,8 +10,11 @@ import { JournalSelectModal } from "@/components/journal-select-modal";
 import { PromptOfTheDay } from "@/components/prompt-of-the-day";
 import TabHeader from "@/components/tab-header";
 import { ThemedView } from "@/components/themed-view";
+import { hexToRgba } from "@/constants/theme";
 import { useApi } from "@/hooks/use-api";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import { SignedIn } from "@clerk/clerk-expo";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
@@ -22,6 +25,7 @@ const SCROLL_PADDING_BOTTOM = 100;
 export default function ExploreScreen() {
   const router = useRouter();
   const api = useApi();
+  const colors = useThemeColors();
   const creatingRef = useRef(false);
   const [journalPickerVisible, setJournalPickerVisible] = useState(false);
   const pendingPromptRef = useRef<string | null>(null);
@@ -33,18 +37,24 @@ export default function ExploreScreen() {
 
   const handleJournalSelected = useCallback(
     async (journalId: string) => {
-      const prompt = pendingPromptRef.current?.trim() || ".";
+      const prompt = pendingPromptRef.current?.trim();
       pendingPromptRef.current = null;
+      const hasPrompt = !!prompt && prompt.length > 0;
       if (creatingRef.current) return;
       creatingRef.current = true;
       try {
         const newEntry = await api.createEntry(journalId, {
-          content: prompt,
-          source: "TEXT",
+          content: ".",
+          source: hasPrompt ? "TEXT" : undefined,
+          ...(hasPrompt && prompt ? { prompt } : {}),
         });
         router.push({
           pathname: "/(home)/entry/[entryId]",
-          params: { entryId: newEntry.id, journalId },
+          params: {
+            entryId: newEntry.id,
+            journalId,
+            ...(hasPrompt ? { prompt } : {}),
+          },
         });
       } catch (e) {
         Alert.alert(
@@ -63,9 +73,24 @@ export default function ExploreScreen() {
     setJournalPickerVisible(true);
   }, []);
 
+  const exploreBgGradient = [
+    colors.background,
+    hexToRgba(colors.primary, 0.03),
+    hexToRgba(colors.accent, 0.05),
+    colors.background,
+  ] as const;
+
   return (
     <ThemedView style={styles.container}>
       <SignedIn>
+        <View style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            colors={exploreBgGradient}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+          />
+        </View>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[

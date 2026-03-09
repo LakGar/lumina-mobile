@@ -1,9 +1,16 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Colors, radius, Shadows } from "@/constants/theme";
+import {
+  API_COLOR_SCHEME_OPTIONS,
+  ColorPalettes,
+  radius,
+  Shadows,
+} from "@/constants/theme";
+import type { ColorSchemeId } from "@/constants/theme";
 import { useTheme } from "@/contexts/theme-context";
 import { useApi } from "@/hooks/use-api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -85,8 +92,7 @@ function formatFrequencyLabel(f: ReminderFrequency): string {
 
 export default function AppSettingsScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "light"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const themeContext = useTheme();
   const api = useApi();
@@ -116,6 +122,13 @@ export default function AppSettingsScreen() {
       ]);
       if (prefs.theme && themeContext?.setPreference) {
         themeContext.setPreference(prefs.theme as ThemeOption);
+      }
+      if (
+        prefs.colorScheme != null &&
+        typeof prefs.colorScheme === "string" &&
+        themeContext?.setColorSchemeFromApi
+      ) {
+        themeContext.setColorSchemeFromApi(prefs.colorScheme);
       }
       setPushEnabled(notif.dailyReminderEnabled ?? true);
       setEmailReminders(notif.dailyReminderEnabled ?? true);
@@ -367,6 +380,78 @@ export default function AppSettingsScreen() {
                     </Text>
                   </Pressable>
                 ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Color scheme */}
+          <View style={styles.section}>
+            <ThemedText
+              style={[styles.sectionTitle, { color: colors.mutedForeground }]}
+            >
+              Color scheme
+            </ThemedText>
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                Shadows.xs,
+              ]}
+            >
+              <Text
+                style={[styles.cardLabel, { color: colors.mutedForeground }]}
+              >
+                Color scheme
+              </Text>
+              <View style={styles.colorSchemeRow}>
+                {API_COLOR_SCHEME_OPTIONS.map((opt) => {
+                  const palette = ColorPalettes[opt.paletteId];
+                  const selected =
+                    themeContext?.colorSchemeApi === opt.value ||
+                    (themeContext?.colorSchemeApi == null &&
+                      themeContext?.colorSchemeId === opt.paletteId);
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        themeContext?.setColorSchemeFromApi(opt.value);
+                        api.updatePreferences({ colorScheme: opt.value }).catch(
+                          () => {},
+                        );
+                      }}
+                      style={({ pressed }) => [
+                        styles.colorSchemeCircleWrap,
+                        pressed && { opacity: 0.8 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${opt.label}${selected ? ", selected" : ""}`}
+                      accessibilityState={{ selected }}
+                    >
+                      <View
+                        style={[
+                          styles.colorSchemeCircle,
+                          {
+                            backgroundColor: palette.swatch,
+                            borderColor: selected
+                              ? colors.foreground
+                              : colors.border,
+                            borderWidth: selected ? 3 : StyleSheet.hairlineWidth,
+                          },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.colorSchemeLabel,
+                          { color: colors.foreground },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
           </View>
@@ -993,6 +1078,25 @@ const styles = StyleSheet.create({
   themeOptionLabel: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  colorSchemeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+  },
+  colorSchemeCircleWrap: {
+    alignItems: "center",
+    width: 56,
+  },
+  colorSchemeCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  colorSchemeLabel: {
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "center",
   },
   listCard: {
     borderRadius: radius.lg,
